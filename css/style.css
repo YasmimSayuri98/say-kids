@@ -1,0 +1,147 @@
+/* ===== Say Kids — Tela de Login (imagem de fundo) ===== */
+:root {
+  --azul: #2f7de1;
+  --azul-escuro: #1e3a5f;
+  --azul-titulo: #12335c;
+  --laranja: #f97316;
+  --laranja-escuro: #ea6a0a;
+  --verde: #8bc34a;
+  --texto: #3a4a5c;
+  --texto-suave: #7a8aa0;
+  --borda: #e6ebf3;
+  --branco: #ffffff;
+  --fonte: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--fonte);
+  color: var(--texto);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ===== Página com imagem de fundo ===== */
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 480px;
+  align-items: center;
+  gap: 40px;
+  padding: 40px 60px 120px 90px;
+
+  /* >>> Imagem de fundo <<< */
+  background-image: url("../assets/fundo-login.png");
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  background-color: #eaf1fb; /* cor de reserva enquanto a imagem não carrega */
+}
+
+/* ===== Coluna esquerda: apresentação ===== */
+.login-hero { position: relative; z-index: 2; padding-right: 20px; padding-top: 30px; align-self: start; margin-top: 60px; }
+
+.brand { display: flex; align-items: center; gap: 14px; margin-bottom: 40px; padding-left: 150px; }
+.brand-name { font-size: 38px; font-weight: 800; line-height: 1; letter-spacing: -.5px; }
+.brand-name .say { color: var(--azul); }
+.brand-name .kids { color: var(--laranja); }
+.brand-sub { font-size: 12px; letter-spacing: 5px; color: #8a97a9; font-weight: 700; margin-top: 5px; }
+
+.hero-title { font-size: 46px; font-weight: 800; line-height: 1.18; margin-bottom: 22px; }
+.hero-title .l1, .hero-title .l3, .hero-title .l4 { color: var(--azul); }
+.hero-title .l2 { color: var(--laranja); }
+
+.hero-text { font-size: 17px; color: #5f7085; max-width: 380px; line-height: 1.6; margin-bottom: 34px; }
+
+.features { display: flex; flex-direction: column; gap: 20px; }
+.feature { display: flex; gap: 16px; align-items: flex-start; }
+.feature-icon {
+  width: 48px; height: 48px; border-radius: 13px; flex-shrink: 0;
+  display: grid; place-items: center;
+}
+.feature-icon svg { width: 24px; height: 24px; }
+.feature-icon.azul { background: var(--azul); }
+.feature-icon.laranja { background: var(--laranja); }
+.feature-icon.verde { background: var(--verde); }
+.feature h4 { font-size: 17px; color: var(--azul-escuro); margin-bottom: 2px; }
+.feature p { font-size: 14px; color: var(--texto-suave); max-width: 250px; line-height: 1.5; }
+
+/* ===== Coluna direita: card ===== */
+.login-side { position: relative; z-index: 2; display: grid; place-items: center; }
+.login-card {
+  background: var(--branco);
+  width: 100%; max-width: 470px;
+  border-radius: 34px;
+  box-shadow: 0 30px 70px rgba(31, 111, 214, 0.18);
+  padding: 40px 44px;
+}
+.card-school-icon { width: 86px; height: 78px; display: block; margin: 0 auto 14px; }
+.card-title { text-align: center; font-size: 34px; font-weight: 800; color: var(--azul-titulo); }
+.card-sub { text-align: center; color: var(--texto-suave); margin: 6px 0 30px; font-size: 16px; }
+
+.field { margin-bottom: 20px; }
+.field label { display: block; font-weight: 700; font-size: 15px; margin-bottom: 8px; color: #48566a; }
+.input-wrap {
+  display: flex; align-items: center; gap: 12px;
+  border: 1.5px solid var(--borda); border-radius: 14px;
+  padding: 0 16px; background: #fcfdff;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input-wrap:focus-within { border-color: var(--azul); box-shadow: 0 0 0 4px rgba(47,125,225,.12); }
+.input-wrap .ico { display: grid; place-items: center; }
+.input-wrap .ico svg { width: 20px; height: 20px; }
+.input-wrap input { border: none; outline: none; background: transparent; padding: 16px 0; font-size: 15px; width: 100%; color: var(--texto); font-family: inherit; }
+.toggle-eye { background: none; border: none; cursor: pointer; display: grid; place-items: center; }
+.toggle-eye svg { width: 20px; height: 20px; }
+
+.form-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
+.remember { display: flex; align-items: center; gap: 9px; cursor: pointer; user-select: none; }
+.remember input { width: 20px; height: 20px; accent-color: var(--azul); border-radius: 6px; }
+.remember span { font-size: 15px; color: #48566a; }
+.link-forgot { color: var(--azul); font-size: 15px; font-weight: 700; text-decoration: none; }
+.link-forgot:hover { text-decoration: underline; }
+
+.btn-primary {
+  width: 100%; border: none; cursor: pointer;
+  background: var(--laranja); color: #fff;
+  font-size: 18px; font-weight: 800; font-family: inherit;
+  padding: 17px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  box-shadow: 0 10px 22px rgba(249,115,22,.35);
+  transition: background .15s, transform .05s;
+}
+.btn-primary svg { width: 22px; height: 22px; }
+.btn-primary:hover { background: var(--laranja-escuro); }
+.btn-primary:active { transform: scale(.99); }
+
+.msg-erro {
+  background: #fdecec; color: #c0392b; border: 1px solid #f5c6c6;
+  padding: 12px 14px; border-radius: 10px; font-size: 14px;
+  margin-bottom: 18px; display: none;
+}
+.msg-erro.show { display: block; }
+
+.card-divider { display: flex; align-items: center; gap: 14px; margin: 26px 0 20px; }
+.card-divider .line { flex: 1; height: 1.5px; background: var(--borda); }
+.card-divider svg { width: 22px; height: 22px; }
+
+.card-mascots { display: flex; justify-content: center; gap: 18px; }
+.card-mascots svg { width: 54px; height: 54px; }
+
+/* ===== Rodapé sobre a onda ===== */
+.footer-text {
+  position: absolute; bottom: 16px; left: 0; right: 0; z-index: 2;
+  display: flex; justify-content: space-between;
+  padding: 0 40px; color: #f0f6ff; font-size: 14px; font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,.15);
+}
+
+/* ===== Responsivo ===== */
+@media (max-width: 1024px) {
+  .login-page { grid-template-columns: 1fr; padding: 30px 24px 120px; background-attachment: scroll; }
+  .login-hero { display: none; }
+  .login-side { min-height: 90vh; }
+}

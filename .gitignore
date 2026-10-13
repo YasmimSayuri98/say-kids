@@ -1,0 +1,14 @@
+# Dependências
+node_modules/
+
+# Backend (contém a senha do banco em db.js — não versionar por enquanto)
+backend/
+
+# Sistema operacional / editores
+.DS_Store
+Thumbs.db
+*.log
+
+# Arquivos temporários
+_preview*.html
+_static.js

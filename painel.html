@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Say Kids — Painel do Administrador</title>
+  <link rel="stylesheet" href="css/painel.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ===== Menu lateral ===== -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <!-- Insira o seu logo em: assets/logo.png -->
+        <img src="assets/logo.png" alt="Logo da escola" class="s-logo-img"
+             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+        <div class="s-logo-placeholder">
+          <span>Seu logo aqui</span>
+          <small>assets/logo.png</small>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav"><!-- itens gerados por perfil (JS) --></nav>
+
+      <div class="sidebar-user">
+        <div class="avatar" id="avatar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+        </div>
+        <div class="u-info">
+          <div class="u-nome" id="u-nome">Perfil</div>
+          <div class="u-perfil" id="u-perfil">—</div>
+        </div>
+        <button class="u-chevron" id="btn-sair" title="Sair">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <div class="overlay" id="overlay"></div>
+
+    <!-- ===== Conteúdo ===== -->
+    <div class="content">
+      <header class="topbar">
+        <button class="btn-menu" id="btn-menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="topbar-title">
+          <h1 id="titulo-pagina">Olá, Administrador!</h1>
+          <p id="subtitulo-pagina">Bem-vindo ao painel de gestão da escola</p>
+        </div>
+        <div class="topbar-right">
+          <div class="bell" title="Notificações">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#3a4a5c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 0 0 4 0"/></svg>
+            <span class="badge">5</span>
+          </div>
+          <div class="date-card">
+            <span class="d-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>
+            </span>
+            <div>
+              <div class="d-data" id="data-hoje">—</div>
+              <div class="d-dia" id="dia-hoje">—</div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="page" id="page"><!-- conteúdo dinâmico --></main>
+    </div>
+
+  </div>
+
+  <script src="js/db-bridge.js"></script>
+  <script src="js/painel.js"></script>
+</body>
+</html>
