@@ -54,6 +54,9 @@ const PATHS = {
   filePlus: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M12 11v6M9 14h6"/>',
   box: '<path d="M3 8l9-5 9 5v8l-9 5-9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
   arrowDown: '<path d="M12 5v14M6 13l6 6 6-6"/>',
+  alignLeft: '<path d="M4 6h16M4 12h10M4 18h13"/>',
+  alignCenter: '<path d="M4 6h16M7 12h10M6 18h12"/>',
+  alignRight: '<path d="M4 6h16M10 12h10M7 18h13"/>',
 };
 function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
 function ic(nome, cor) {
@@ -106,6 +109,24 @@ function setSecretarias(arr) { localStorage.setItem("saykids_secretarias", JSON.
 function iniciais(nome) { return nome.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join("").toUpperCase(); }
 
 const MAX_TURMAS_AUXILIAR = 2;
+
+/* Regras de período das turmas (professor / auxiliar):
+   - as turmas selecionadas devem ter períodos diferentes;
+   - turma de período Integral só pode ser escolhida sozinha. */
+function validarTurmasPeriodo(nomesTurmas) {
+  const periodos = getTurmas().filter((t) => nomesTurmas.includes(t.nome)).map((t) => (t.periodo || "").trim().toLowerCase());
+  if (periodos.some((p) => p === "integral") && nomesTurmas.length > 1)
+    return "Turma de período Integral não pode ser combinada com outra. Selecione apenas essa turma.";
+  if (periodos.some((p, i) => p && periodos.indexOf(p) !== i))
+    return "As turmas selecionadas têm o mesmo período. Escolha turmas de períodos diferentes.";
+  return null;
+}
+function checarTurmasLive(selector, alvo, max) {
+  const marcadas = [...document.querySelectorAll(selector + ":checked")];
+  if (marcadas.length > max) { alvo.checked = false; alert(`No máximo ${max} turma(s).`); return; }
+  const msg = validarTurmasPeriodo(marcadas.map((c) => c.value));
+  if (msg) { alvo.checked = false; alert(msg); }
+}
 
 /* ===== Armazenamento de turmas (localStorage) ===== */
 const TURMAS_PADRAO = [
@@ -236,6 +257,16 @@ function getFrequencia() {
 function setFrequencia(arr) { localStorage.setItem("saykids_frequencia", JSON.stringify(arr)); }
 function getNotificacoes() { const s = localStorage.getItem("saykids_notificacoes"); try { return s ? JSON.parse(s) : []; } catch (e) { return []; } }
 function setNotificacoes(arr) { localStorage.setItem("saykids_notificacoes", JSON.stringify(arr)); }
+/* Recados: o responsável escreve e aparece para professor/auxiliar (sem resposta) */
+function getRecados() { const s = localStorage.getItem("saykids_recados"); try { return s ? JSON.parse(s) : []; } catch (e) { return []; } }
+function setRecados(arr) { localStorage.setItem("saykids_recados", JSON.stringify(arr)); }
+function recadosDoAluno(nome) { return getRecados().filter((r) => r.aluno === nome); }
+/* Data do recado em formato ISO (AAAA-MM-DD), a partir do dataISO ou da data BR */
+function recadoISO(r) {
+  if (r.dataISO) return r.dataISO;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(r.data || "");
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
 /* RF-09: cria notificação aos responsáveis do aluno ao registrar entrada/saída */
 function notificarResponsaveis(alunoNome, tipo, hora, data) {
   const aluno = getAlunos().find((a) => a.nome === alunoNome);
@@ -324,14 +355,28 @@ function turmaDoAluno(nome) {
   const t = getTurmas().find((x) => (x.alunos || []).includes(nome));
   return t ? t.nome : "";
 }
+function respDoAluno(a) {
+  const nome = (a.responsaveis && a.responsaveis[0]) || "";
+  return getResponsaveis().find((x) => x.nome === nome) || {};
+}
 const CATALOGO_CAMPOS = [
   { etiqueta: "Nome do aluno", valor: (a) => a.nome || "" },
+  { etiqueta: "Número de matrícula", valor: (a) => a.matricula || "" },
+  { etiqueta: "RA do aluno", valor: (a) => a.ra || "" },
   { etiqueta: "CPF do aluno", valor: (a) => a.cpf || "" },
+  { etiqueta: "Data de nascimento do aluno", valor: (a) => a.data_nascimento ? dataBR(a.data_nascimento) : "" },
   { etiqueta: "Endereço do aluno", valor: (a) => [a.rua, a.numero, a.bairro].filter(Boolean).join(", ") },
+  { etiqueta: "Rua do aluno", valor: (a) => a.rua || "" },
+  { etiqueta: "Bairro do aluno", valor: (a) => a.bairro || "" },
+  { etiqueta: "Número do aluno", valor: (a) => a.numero || "" },
+  { etiqueta: "Complemento do aluno", valor: (a) => a.complemento || "" },
   { etiqueta: "CEP do aluno", valor: (a) => a.cep || "" },
   { etiqueta: "Turma", valor: (a) => turmaDoAluno(a.nome) },
-  { etiqueta: "Nome do responsável", valor: (a) => (a.responsaveis && a.responsaveis[0]) || "" },
-  { etiqueta: "Restrições alimentares", valor: (a) => a.restricoes || "" },
+  { etiqueta: "Período da turma", valor: (a) => { const t = getTurmas().find((x) => x.nome === turmaDoAluno(a.nome)); return t ? (t.periodo || "") : ""; } },
+  { etiqueta: "Nome do responsável", valor: (a) => respDoAluno(a).nome || "" },
+  { etiqueta: "Documento do responsável", valor: (a) => respDoAluno(a).cpf || "" },
+  { etiqueta: "Telefone do responsável", valor: (a) => respDoAluno(a).telefone || "" },
+  { etiqueta: "Restrições alimentares", valor: (a) => restricoesTexto(a) },
   { etiqueta: "Data de hoje", valor: () => new Date().toLocaleDateString("pt-BR") },
   { etiqueta: "Nome da escola", valor: () => "Say Kids" },
 ];
@@ -367,7 +412,7 @@ const NOMES_ALUNOS = [
   "Manuela Freitas", "Heitor Barbosa", "Alice Monteiro", "Enzo Carvalho",
 ];
 function alunoVazio(nome) {
-  return { nome, cpf: "", data_nascimento: "", cep: "", rua: "", bairro: "", numero: "", complemento: "", responsaveis: [], restricoes: [], informacoes_medicas: "", emergencia: [], autorizados: [], qr_code: "" };
+  return { nome, cpf: "", data_nascimento: "", ra: "", matricula: "", cep: "", rua: "", bairro: "", numero: "", complemento: "", responsaveis: [], restricoes: [], informacoes_medicas: "", emergencia: [], autorizados: [], qr_code: "" };
 }
 /* Restrições podem vir como texto (dados antigos) ou lista [{alimento,gravidade}] */
 function restricoesLista(a) {
@@ -378,6 +423,7 @@ function restricoesLista(a) {
 function restricoesTexto(a) { return restricoesLista(a).map((r) => r.alimento).filter(Boolean).join(", "); }
 function alunoTemRestricao(a) { return restricoesTexto(a).trim().length > 0; }
 function gerarQRCode() { return "SK-" + Date.now().toString(36).toUpperCase() + "-" + Math.floor(1000 + Math.random() * 9000); }
+function gerarMatricula() { return String(new Date().getFullYear()) + String(Date.now()).slice(-6); }
 function getAlunos() {
   const s = localStorage.getItem("saykids_alunos");
   if (s === null) {
@@ -619,8 +665,8 @@ function formColaborador() {
   fotoDataUrl = d.foto || "";
   const turmasSel = d.turmas || [];
   const auxiliar = d.funcao === "Auxiliar";
-  const chips = turmasDisponiveis().map((t) =>
-    `<label class="turma-chip"><input type="checkbox" name="turma" value="${t}" ${turmasSel.includes(t) ? "checked" : ""}><span>${t}</span></label>`).join("");
+  const chips = getTurmas().map((t) =>
+    `<label class="turma-chip"><input type="checkbox" name="turma" value="${t.nome}" ${turmasSel.includes(t.nome) ? "checked" : ""}><span>${t.nome} <small style="opacity:.65">(${t.periodo || "—"})</small></span></label>`).join("");
   return `
     <div class="page-head">
       <div class="ph-left">
@@ -659,7 +705,7 @@ function formColaborador() {
 
               <div class="linha" id="bloco-turmas" style="display:${auxiliar ? "" : "none"}">
                 <div class="campo">
-                  <label>Turmas do auxiliar <span class="obrig">*</span> <span class="hint-max">(máximo ${MAX_TURMAS_AUXILIAR})</span></label>
+                  <label>Turmas do auxiliar <span class="obrig">*</span> <span class="hint-max">(máx. ${MAX_TURMAS_AUXILIAR}, períodos diferentes; Integral só sozinha)</span></label>
                   <div class="turmas-grid">${chips}</div>
                 </div>
               </div>
@@ -714,8 +760,8 @@ function formProfessor() {
   const d = editando ? getProfessores()[editProfIdx] : {};
   fotoDataUrl = d.foto || "";
   const turmasSel = d.turmas || [];
-  const chips = turmasDisponiveis().map((t) =>
-    `<label class="turma-chip"><input type="checkbox" name="turma-prof" value="${t}" ${turmasSel.includes(t) ? "checked" : ""}><span>${t}</span></label>`).join("");
+  const chips = getTurmas().map((t) =>
+    `<label class="turma-chip"><input type="checkbox" name="turma-prof" value="${t.nome}" ${turmasSel.includes(t.nome) ? "checked" : ""}><span>${t.nome} <small style="opacity:.65">(${t.periodo || "—"})</small></span></label>`).join("");
   return `
     <div class="page-head">
       <div class="ph-left">
@@ -752,7 +798,7 @@ function formProfessor() {
               </div>
               <div class="linha">
                 <div class="campo">
-                  <label>Turmas <span class="obrig">*</span> <span class="hint-max">(selecione as turmas do professor)</span></label>
+                  <label>Turmas <span class="obrig">*</span> <span class="hint-max">(máx. 2, períodos diferentes; Integral só sozinha)</span></label>
                   <div class="turmas-grid">${chips}</div>
                 </div>
               </div>
@@ -1035,6 +1081,13 @@ function formAluno() {
             ${campo("CPF", true, "idcard", "text", "f-cpf", "000.000.000-00", d.cpf)}
             ${campo("Data de nascimento", true, "calendar", "date", "f-nascimento", "", d.data_nascimento)}
           </div>
+          <div class="linha c2">
+            ${campo("RA (Registro do Aluno)", false, "idcard", "text", "f-ra", "Digite o RA (opcional)", d.ra)}
+            <div class="campo">
+              <label>Número de matrícula <span class="hint-max">(gerado automaticamente ao salvar)</span></label>
+              <div class="inp">${ic("tag", "#9aa7b8")}<input type="text" id="f-matricula" value="${esc(d.matricula || "")}" placeholder="Gerado ao salvar" readonly></div>
+            </div>
+          </div>
           <div class="linha c3">
             ${campo("CEP", true, "location", "text", "f-cep", "00000-000", d.cep)}
             ${campo("Rua", true, "map", "text", "f-rua", "Digite o nome da rua", d.rua)}
@@ -1130,6 +1183,14 @@ function paginaResponsaveis() {
 function formResponsavel() {
   const editando = editRespIdx != null;
   const d = editando ? getResponsaveis()[editRespIdx] : {};
+  const vinculados = editando ? getAlunos().filter((a) => (a.responsaveis || []).includes(d.nome)) : [];
+  const vinculadosHtml = editando ? `
+          <div class="bloco-titulo" style="margin-top:26px">Alunos vinculados</div>
+          <div class="linha">
+            ${vinculados.length
+              ? `<div class="alunos-grid">${vinculados.map((a) => `<div class="aluno-card"><div class="aluno-card-head"><span class="sec-avatar">${iniciais(a.nome)}</span><b>${esc(a.nome)}</b></div><div class="aluno-info"><span class="ai-label">Turma</span><span class="ai-val">${esc(turmaDoAluno(a.nome) || "—")}</span></div><div class="aluno-info"><span class="ai-label">Matrícula</span><span class="ai-val">${esc(a.matricula || "—")}</span></div></div>`).join("")}</div>`
+              : `<p class="hint">Nenhum aluno vinculado ainda. O vínculo é feito no cadastro do aluno.</p>`}
+          </div>` : "";
   return `
     <div class="page-head">
       <div class="ph-left">
@@ -1161,6 +1222,7 @@ function formResponsavel() {
           <div class="linha">
             ${campo("Complemento", false, "note", "text", "f-complemento", "Digite o complemento (opcional)", d.complemento)}
           </div>
+          ${vinculadosHtml}
 
           <div class="form-actions">
             <button type="button" class="btn-cancelar" data-goto="${voltar("responsaveis")}">${ic("x", "currentColor")} Cancelar</button>
@@ -1265,11 +1327,31 @@ function formDocumento() {
             </div>
           </div>
 
-          <div class="bloco-titulo" style="margin-top:26px">Modelo do documento (TXT)</div>
+          <div class="bloco-titulo" style="margin-top:26px">Modelo do documento</div>
           <div class="linha">
             <div class="campo">
-              <label>Texto do documento <span class="hint-max">(cole o texto já configurado com as etiquetas &lt;&lt; nome &gt;&gt; onde o sistema deve preencher — clique numa etiqueta acima para inserir no texto)</span></label>
-              <textarea id="f-texto" class="doc-textarea" placeholder="Cole aqui o texto do documento. Ex.: Declaramos que << Nome do aluno >>, portador do CPF << CPF do aluno >>, está regularmente matriculado(a) nesta instituição.">${esc(d.texto)}</textarea>
+              <label>Texto do documento <span class="hint-max">(use a barra para formatar; clique numa etiqueta acima para inserir um campo &lt;&lt; nome &gt;&gt;)</span></label>
+              <div class="rt-bar">
+                <button type="button" class="rt-btn" data-cmd="bold" title="Negrito"><b>N</b></button>
+                <button type="button" class="rt-btn" data-cmd="italic" title="Itálico"><i>I</i></button>
+                <button type="button" class="rt-btn" data-cmd="underline" title="Sublinhado"><u>S</u></button>
+                <button type="button" class="rt-btn" data-cmd="hiliteColor" data-val="#fde68a" title="Grifar"><span class="rt-grifo">G</span></button>
+                <span class="rt-sep"></span>
+                <button type="button" class="rt-btn" data-cmd="justifyLeft" title="Alinhar à esquerda">${ic("alignLeft", "#3a4a5c")}</button>
+                <button type="button" class="rt-btn" data-cmd="justifyCenter" title="Centralizar">${ic("alignCenter", "#3a4a5c")}</button>
+                <button type="button" class="rt-btn" data-cmd="justifyRight" title="Alinhar à direita">${ic("alignRight", "#3a4a5c")}</button>
+                <span class="rt-sep"></span>
+                <select id="doc-tamanho" class="rt-sel" title="Tamanho do texto">
+                  <option value="">Tamanho</option><option value="2">Pequeno</option><option value="3">Normal</option><option value="5">Grande</option><option value="6">Título</option>
+                </select>
+                <input type="color" id="doc-cor" class="rt-color" title="Cor do texto" value="#1e293b">
+                <span class="rt-sep"></span>
+                <button type="button" class="rt-btn rt-logo" data-doc-logo title="Inserir logo / imagem">${ic("filePlus", "#3a4a5c")} Logo</button>
+                <button type="button" class="rt-btn" data-logo-size="menor" title="Diminuir o logo (clique na imagem antes)"><b>−</b></button>
+                <button type="button" class="rt-btn" data-logo-size="maior" title="Aumentar o logo (clique na imagem antes)"><b>+</b></button>
+              </div>
+              <div id="f-texto" class="doc-editor" contenteditable="true">${d.texto || ""}</div>
+              <input type="file" id="doc-logo-input" accept="image/png,image/jpeg" hidden>
             </div>
           </div>
 
@@ -1340,7 +1422,7 @@ function documentosEmitir() {
 function documentoGerado() {
   const em = getEmissoes()[viewEmissaoIdx];
   if (!em) return documentosEmitir();
-  const corpo = esc(em.texto || "").replace(/\n/g, "<br>");
+  const corpo = em.texto || "";
   const assinatura = em.assinatura
     ? `<div class="folha-assinatura"><img src="${em.assinatura}" alt="Assinatura"><div class="folha-linha">Assinatura do responsável</div></div>`
     : "";
@@ -1416,31 +1498,48 @@ function salvarDiasCardapio() {
   document.querySelectorAll(".dia-editor").forEach((el) => { cardapioDias[el.dataset.dia] = el.innerHTML; });
 }
 function cardapioVerificacao() {
-  const v = ultimaVerificacao || { conflitos: [], faltas: [], turma: "", mes: "", ano: "" };
-  const okRestr = v.conflitos.length === 0;
-  const okEst = v.faltas.length === 0;
-  const restrHtml = okRestr
-    ? `<div class="verif-ok">${ic("check", "#1c8055")} Nenhuma incompatibilidade: o cardápio respeita as restrições dos alunos da turma.</div>`
-    : v.conflitos.map((c) => `<div class="verif-alerta restr">${ic("clipboard", "#b02a3a")}<div><b>${esc(c.aluno)}</b> tem restrição a <b>${esc(c.alimento)}</b>${c.gravidade ? " (" + esc(c.gravidade) + ")" : ""} — presente no cardápio.</div></div>`).join("");
-  const estHtml = okEst
-    ? `<div class="verif-ok">${ic("check", "#1c8055")} Estoque suficiente para todos os alimentos do cardápio.</div>`
-    : `<table class="mini-tbl"><thead><tr><th>Alimento</th><th>Necessário</th><th>Em estoque</th><th>Comprar</th></tr></thead><tbody>${v.faltas.map((f) => `<tr><td>${esc(f.alimento)}</td><td>${f.necessario} ${esc(f.unidade)}</td><td>${f.disponivel} ${esc(f.unidade)}</td><td class="falta">${f.falta} ${esc(f.unidade)}</td></tr>`).join("")}</tbody></table>`;
+  const v = ultimaVerificacao || { faltas: [], turma: "", mes: "", ano: "" };
+  const faltas = v.faltas || [];
+  const okEst = faltas.length === 0;
+  const estoqueBloco = okEst
+    ? `<div class="verif-ok"><span class="vi">${ic("check", "#1c8055")}</span> Estoque suficiente para todos os alimentos do cardápio.</div>`
+    : `<div class="verif-aviso"><span class="vi">${ic("box", "#b25a12")}</span> Alguns alimentos não têm estoque suficiente. Lista de compras gerada:</div>
+       <div class="lista-compra-box">
+         ${faltas.map((f) => `
+           <label class="lc-item">
+             <input type="checkbox" class="lc-check">
+             <span class="lc-nome">${esc(f.alimento)}</span>
+             <span class="lc-qtd">Comprar: <b>${f.falta} ${esc(f.unidade || "")}</b></span>
+           </label>`).join("")}
+       </div>
+       <button class="btn-laranja" id="btn-imprimir-lc" style="margin-top:14px">${ic("printer", "#fff")} Imprimir / Salvar PDF</button>`;
   return `
     <div class="page-head">
       <div class="ph-left">
-        <div><div class="ph-title">Cardápio salvo — verificações</div><div class="ph-sub">${esc(v.turma)} · ${esc(v.mes)}/${v.ano}</div></div>
+        <div><div class="ph-title">Cardápio salvo com sucesso</div><div class="ph-sub">${esc(v.turma)} · ${esc(v.mes)}/${v.ano}</div></div>
       </div>
-      <button class="btn-laranja" data-goto="cardapio">${ic("check", "#fff")} Concluir</button>
+      <button class="btn-laranja" data-goto="cardapio">Concluir</button>
     </div>
     <div class="panel">
-      <h2 style="margin-bottom:14px">${ic("clipboard", okRestr ? "#1c8055" : "#b02a3a")} <span style="vertical-align:3px">Restrições alimentares (RF-15)</span></h2>
-      ${restrHtml}
+      <div class="verif-ok"><span class="vi">${ic("check", "#1c8055")}</span> Nenhum aluno da turma tem restrição aos alimentos do cardápio.</div>
     </div>
     <div class="panel" style="margin-top:18px">
-      <h2 style="margin-bottom:14px">${ic("box", okEst ? "#1c8055" : "#b25a12")} <span style="vertical-align:3px">Disponibilidade em estoque (RF-14)</span></h2>
-      ${estHtml}
-      ${okEst ? "" : `<p class="hint" style="margin-top:12px">Uma lista de compra foi gerada para reposição (visível no estoque do almoxarife).</p>`}
+      <h3 class="verif-titulo">Disponibilidade em estoque</h3>
+      ${estoqueBloco}
     </div>`;
+}
+/* Abre a lista de compras numa janela pronta para imprimir / salvar como PDF */
+function imprimirListaCompra(faltas, titulo) {
+  const linhas = (faltas || []).map((f) => `<tr><td>${esc(f.alimento)}</td><td>${f.falta} ${esc(f.unidade || "")}</td></tr>`).join("");
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>Lista de Compras - Say Kids</title>
+    <style>body{font-family:Arial,sans-serif;padding:32px;color:#222}h1{color:#f97316;margin:0 0 4px;font-size:22px}p{color:#555;margin:0 0 20px}
+    table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:10px 12px;text-align:left;font-size:14px}th{background:#f3f4f6}</style></head>
+    <body><h1>Lista de Compras - Say Kids</h1><p>${esc(titulo || "")}</p>
+    <table><thead><tr><th>Alimento</th><th>Quantidade a comprar</th></tr></thead><tbody>${linhas}</tbody></table>
+    <script>window.onload=function(){window.print();}</script></body></html>`;
+  const w = window.open("", "_blank");
+  if (!w) { alert("Permita pop-ups para abrir a lista de compras para impressão."); return; }
+  w.document.open(); w.document.write(html); w.document.close();
 }
 function cardapioItemRow(it) {
   it = it || {};
@@ -1599,6 +1698,9 @@ function sonoRow(s) {
 }
 function salvarAgendaAtual() {
   const ag = getAgenda();
+  // Atividades do dia: campo único (professor), espelhado para todos os alunos da turma
+  const atEl = document.getElementById("ag-atividades-turma");
+  const atividadesTurma = atEl ? atEl.value : null;
   document.querySelectorAll(".agenda-card").forEach((card) => {
     const aluno = card.dataset.aluno;
     const chave = chaveAgenda(aluno, agendaDataSel);
@@ -1609,31 +1711,41 @@ function salvarAgendaAtual() {
     const sono = [...card.querySelectorAll(".ag-sono-row")]
       .map((r) => ({ situacao: r.querySelector(".ag-sono-sit").value, horario: r.querySelector(".ag-hora").value }))
       .filter((x) => x.horario);
-    const at = card.querySelector(".ag-atividades");
     const obs = card.querySelector(".ag-observacoes");
     ag[chave] = {
       alimentacao, sono,
-      atividades: at ? at.value : (prev.atividades || ""),
+      atividades: (atividadesTurma != null) ? atividadesTurma : (prev.atividades || ""),
       observacoes: obs ? obs.value : (prev.observacoes || ""),
     };
   });
   setAgenda(ag);
 }
+let agendaSaveTimer = null;
+function autoSalvarAgenda() {
+  if (paginaAtual !== "professorAgenda" && paginaAtual !== "auxiliarAgenda") return;
+  clearTimeout(agendaSaveTimer);
+  agendaSaveTimer = setTimeout(salvarAgendaAtual, 300);
+}
 function telaAgenda(soAlimSono, titulo, subtitulo) {
   if (!agendaDataSel) agendaDataSel = new Date().toISOString().slice(0, 10);
-  const alunos = alunosDasTurmas(turmasDoUsuario());
+  const turmasUsuario = turmasDoUsuario();
+  // só mostra alunos depois que uma turma for escolhida
+  const alunos = agendaTurmaSel ? alunosDasTurmas([agendaTurmaSel]) : [];
   const ag = getAgenda();
+  const mostrarAtividades = !soAlimSono; // professor tem atividades e observações
+  const atividadesTurma = (alunos.length && ag[chaveAgenda(alunos[0], agendaDataSel)]) ? (ag[chaveAgenda(alunos[0], agendaDataSel)].atividades || "") : "";
   const cards = alunos.map((nome) => {
     const e = ag[chaveAgenda(nome, agendaDataSel)] || {};
     const alim = (e.alimentacao && e.alimentacao.length) ? e.alimentacao : [{}];
     const sono = (e.sono && e.sono.length) ? e.sono : [{}];
-    const extras = soAlimSono ? "" : `
-        <div class="ag-secoes">
-          <div class="ag-secao"><div class="ag-secao-titulo">Atividades</div>
-            <textarea class="ag-atividades" placeholder="Descreva as atividades do dia">${esc(e.atividades)}</textarea></div>
-          <div class="ag-secao"><div class="ag-secao-titulo">Observações</div>
-            <textarea class="ag-observacoes" placeholder="Observações gerais">${esc(e.observacoes)}</textarea></div>
-        </div>`;
+    const recados = recadosDoAluno(nome).filter((r) => recadoISO(r) === agendaDataSel);
+    const recadosHtml = recados.length
+      ? `<div class="ag-secao"><div class="ag-secao-titulo">Recados do responsável (do dia)</div>${recados.map((r) => `<div class="ag-view">${esc(r.texto)} <span class="ag-recado-data">(${esc(r.hora || "")})</span></div>`).join("")}</div>`
+      : "";
+    const obsHtml = mostrarAtividades
+      ? `<div class="ag-secao"><div class="ag-secao-titulo">Observações</div>
+          <textarea class="ag-observacoes" placeholder="Observações sobre ${esc(nome)}">${esc(e.observacoes)}</textarea></div>`
+      : "";
     return `
       <div class="agenda-card" data-aluno="${esc(nome)}">
         <div class="agenda-card-head"><span class="sec-avatar">${iniciais(nome)}</span><span>${nome}</span></div>
@@ -1651,26 +1763,55 @@ function telaAgenda(soAlimSono, titulo, subtitulo) {
             <button type="button" class="btn-add-linha" data-add-sono>${ic("plus", COR.azul)} Adicionar sono</button>
           </div>
         </div>
-        ${extras}
+        ${obsHtml}
+        ${recadosHtml}
       </div>`;
   }).join("");
+  const atividadesBloco = (mostrarAtividades && agendaTurmaSel && alunos.length)
+    ? `<div class="panel" style="margin-bottom:16px"><div class="ag-secao-titulo">Atividades do dia</div>
+         <textarea id="ag-atividades-turma" class="ag-atividades" placeholder="Descreva as atividades do dia — será aplicado a todos os alunos da turma">${esc(atividadesTurma)}</textarea></div>`
+    : "";
 
-  const corpo = alunos.length
-    ? cards
-    : `<div class="panel"><div class="empty"><div class="big">${ic("users", "#9aa7b8")}</div><h2>Nenhum aluno nas suas turmas</h2><p style="margin-top:8px">Os alunos aparecem aqui quando forem associados às suas turmas.</p></div></div>`;
+  let corpo;
+  if (!agendaTurmaSel) {
+    corpo = `<div class="panel"><div class="empty"><div class="big">${ic("users", "#9aa7b8")}</div><h2>Selecione uma turma</h2><p style="margin-top:8px">Escolha a turma no filtro acima para ver os alunos e preencher a agenda.</p></div></div>`;
+  } else if (!alunos.length) {
+    corpo = `<div class="panel"><div class="empty"><div class="big">${ic("users", "#9aa7b8")}</div><h2>Nenhum aluno nesta turma</h2><p style="margin-top:8px">Os alunos aparecem aqui quando forem associados a esta turma.</p></div></div>`;
+  } else {
+    corpo = atividadesBloco + cards;
+  }
+
+  const opTurma = [`<option value="" ${agendaTurmaSel ? "" : "selected"} disabled>Selecione a turma</option>`]
+    .concat(turmasUsuario.map((t) => `<option ${t === agendaTurmaSel ? "selected" : ""}>${esc(t)}</option>`)).join("");
 
   return `
     <div class="page-head">
       <div class="ph-left"><div><div class="ph-title">${titulo}</div><div class="ph-sub">${subtitulo}</div></div></div>
       <div class="agenda-topo">
+        <div class="inp filtro-inp"><span class="d-ico">${ic("filter", "#9aa7b8")}</span><select id="agenda-turma">${opTurma}</select></div>
         <div class="inp filtro-inp"><span class="d-ico">${ic("calendar", "#9aa7b8")}</span><input type="date" id="agenda-data" value="${agendaDataSel}"></div>
-        <button type="button" class="btn-laranja" data-salvar-agenda>${ic("save", "#fff")} Salvar agenda</button>
       </div>
     </div>
     ${corpo}`;
 }
 function professorAgenda() { return telaAgenda(false, "Agenda dos Alunos", "Preencha a agenda diária de cada aluno"); }
 function auxiliarAgenda() { return telaAgenda(true, "Agenda da Turma", "Preencha a alimentação e o sono de cada aluno"); }
+
+/* Recados recebidos dos responsáveis (professor/auxiliar — somente leitura) */
+function recadosProfAux() {
+  const alunosTurma = alunosDasTurmas(turmasDoUsuario());
+  const recados = getRecados().filter((r) => alunosTurma.includes(r.aluno));
+  const corpo = recados.length
+    ? recados.map((r) => `
+        <div class="resp-dia-card">
+          <div class="resp-dia-data">${esc(r.aluno)} <span class="ag-recado-data">· ${esc(r.data || "")} ${esc(r.hora || "")}</span></div>
+          <div class="ag-view">${esc(r.texto)}</div>
+        </div>`).join("")
+    : `<div class="empty"><div class="big">${ic("doc", "#9aa7b8")}</div><h2>Nenhum recado recebido</h2><p style="margin-top:8px">Os recados enviados pelos responsáveis dos seus alunos aparecem aqui.</p></div>`;
+  return `
+    <div class="page-head"><div class="ph-left"><div><div class="ph-title">Recados</div><div class="ph-sub">Recados enviados pelos responsáveis (somente leitura)</div></div></div></div>
+    <div class="panel">${corpo}</div>`;
+}
 
 /* ----- Turmas do usuário (professor / auxiliar) ----- */
 function telaTurmas(titulo, subtitulo, mostrarAlunos) {
@@ -1722,6 +1863,161 @@ function professorAlunos() {
 }
 
 /* ----- Responsável: AGENDA do(s) filho(s) (somente leitura) ----- */
+/* ===================== APP DO RESPONSÁVEL (#8) ===================== */
+function filhosDoResponsavel() {
+  const nome = (sessao && sessao.nome) || "";
+  return getAlunos().filter((a) => (a.responsaveis || []).includes(nome));
+}
+function alunoRespAtual() {
+  const filhos = filhosDoResponsavel();
+  if (!respAlunoSel || !filhos.find((a) => a.nome === respAlunoSel)) respAlunoSel = filhos.length ? filhos[0].nome : "";
+  return filhos.find((a) => a.nome === respAlunoSel) || null;
+}
+function respSemFilho() {
+  return `<div class="panel"><div class="empty"><div class="big">${ic("users", "#9aa7b8")}</div><h2>Nenhum filho vinculado</h2><p style="margin-top:8px">Fale com a secretaria para vincular seu filho(a) ao seu cadastro.</p></div></div>`;
+}
+function respHeader(titulo, comData, comMes) {
+  const filhos = filhosDoResponsavel();
+  const aluno = alunoRespAtual();
+  const selFilho = filhos.length > 1 ? `<div class="inp filtro-inp"><span class="d-ico">${ic("users", "#9aa7b8")}</span><select id="resp-filho">${filhos.map((f) => `<option ${aluno && f.nome === aluno.nome ? "selected" : ""}>${esc(f.nome)}</option>`).join("")}</select></div>` : "";
+  const dataF = comData ? `<div class="inp filtro-inp"><span class="d-ico">${ic("calendar", "#9aa7b8")}</span><input type="date" id="resp-data" value="${agendaDataSel}"></div>` : "";
+  let mesF = "";
+  if (comMes) {
+    const [anoSel, mmSel] = respMesSel.split("-");
+    const anoAtual = new Date().getFullYear();
+    const anos = [anoAtual, anoAtual - 1];
+    const opMes = MESES.map((m, idx) => { const v = String(idx + 1).padStart(2, "0"); return `<option value="${v}" ${v === mmSel ? "selected" : ""}>${m}</option>`; }).join("");
+    const opAno = anos.map((a) => `<option ${String(a) === anoSel ? "selected" : ""}>${a}</option>`).join("");
+    mesF = `<div class="inp filtro-inp"><span class="d-ico">${ic("calendar", "#9aa7b8")}</span><select id="resp-mes-mes">${opMes}</select></div>
+            <div class="inp filtro-inp"><select id="resp-mes-ano">${opAno}</select></div>`;
+  }
+  return `<div class="page-head"><div class="ph-left"><button class="back-btn" data-goto="inicioResponsavel" title="Voltar">${ic("arrowLeft", COR.azul)}</button><div><div class="ph-title">${titulo}</div><div class="ph-sub">${esc(aluno ? aluno.nome : "")}</div></div></div><div class="agenda-topo">${selFilho}${dataF}${mesF}</div></div>`;
+}
+function inicioResponsavel() {
+  if (!agendaDataSel) agendaDataSel = new Date().toISOString().slice(0, 10);
+  const aluno = alunoRespAtual();
+  if (!aluno) return `<div class="resp-topo"><div class="resp-saud">Olá!</div></div>` + respSemFilho();
+  const filhos = filhosDoResponsavel();
+  const selFilho = filhos.length > 1 ? `<div class="inp filtro-inp" style="margin-left:auto"><span class="d-ico">${ic("users", "#fff")}</span><select id="resp-filho">${filhos.map((f) => `<option ${f.nome === aluno.nome ? "selected" : ""}>${esc(f.nome)}</option>`).join("")}</select></div>` : "";
+  const tiles = [
+    { p: "respFrequencia", i: "check", c: "#22a06b", t: "Frequência", s: "Presenças do ano" },
+    { p: "respAlimentacao", i: "apple", c: "#e2536e", t: "Alimentação", s: "Refeições registradas" },
+    { p: "respSoninho", i: "clipboard", c: "#7c5cdb", t: "Soninho", s: "Registros de sono" },
+    { p: "respAtividades", i: "clipboard", c: "#2563eb", t: "Atividades", s: "Do dia" },
+    { p: "respObservacoes", i: "note", c: "#f97316", t: "Observações", s: "Do dia" },
+    { p: "respCardapio", i: "apple", c: "#1c8055", t: "Cardápio do dia", s: "O que vai comer" },
+    { p: "respDados", i: "userline", c: "#0ea5e9", t: "Dados do aluno", s: "Foto e cadastro" },
+    { p: "respRecados", i: "doc", c: "#d97706", t: "Recados", s: "Enviar recado" },
+  ];
+  return `
+    <div class="resp-topo">
+      <div class="resp-avatar">${aluno.foto ? `<img src="${aluno.foto}" alt="">` : iniciais(aluno.nome)}</div>
+      <div><div class="resp-saud">Olá! Acompanhe o dia de</div><div class="resp-aluno-nome">${esc(aluno.nome)}</div></div>
+      ${selFilho}
+    </div>
+    <div class="resp-tiles">
+      ${tiles.map((x) => `<button class="resp-tile" data-goto="${x.p}" style="--c:${x.c}"><span class="resp-tile-ico">${ic(x.i, "#fff")}</span><span class="resp-tile-t">${x.t}</span><span class="resp-tile-s">${x.s}</span></button>`).join("")}
+    </div>`;
+}
+function respFrequencia() {
+  const aluno = alunoRespAtual();
+  if (!aluno) return respHeader("Frequência") + respSemFilho();
+  const regs = getFrequencia().filter((f) => f.pessoa === aluno.nome && (f.data || "").startsWith(respMesSel));
+  const dias = {};
+  regs.forEach((f) => { (dias[f.data] = dias[f.data] || []).push(f); });
+  const linhas = Object.keys(dias).sort().reverse().map((data) => {
+    const ent = dias[data].filter((f) => f.tipo === "Entrada").map((f) => f.hora).sort();
+    const sai = dias[data].filter((f) => f.tipo === "Saída").map((f) => f.hora).sort();
+    return `<tr><td>${dataBR(data)}</td><td>${ent[0] || "—"}</td><td>${sai[sai.length - 1] || "—"}</td></tr>`;
+  }).join("");
+  const corpo = linhas
+    ? `<table><thead><tr><th>Data</th><th>Chegada</th><th>Saída</th></tr></thead><tbody>${linhas}</tbody></table><p class="hint" style="margin-top:10px">${Object.keys(dias).length} dia(s) de presença no mês.</p>`
+    : `<div class="empty"><div class="big">${ic("check", "#9aa7b8")}</div><h2>Sem presenças no mês selecionado</h2></div>`;
+  return respHeader("Frequência", false, true) + `<div class="panel">${corpo}</div>`;
+}
+function respHistoricoAgenda(titulo, campo, iconeRender) {
+  const aluno = alunoRespAtual();
+  if (!aluno) return respHeader(titulo) + respSemFilho();
+  const ag = getAgenda();
+  const umAnoAtras = new Date(Date.now() - 366 * 864e5).toISOString().slice(0, 10);
+  const itens = Object.keys(ag).filter((k) => k.indexOf(aluno.nome + "||") === 0)
+    .map((k) => ({ data: k.split("||")[1], e: ag[k] }))
+    .filter((x) => x.data >= umAnoAtras && x.e[campo] && x.e[campo].length)
+    .sort((a, b) => b.data.localeCompare(a.data));
+  const cards = itens.map((x) => `<div class="resp-dia-card"><div class="resp-dia-data">${dataBR(x.data)}</div>${iconeRender(x.e[campo])}</div>`).join("");
+  return respHeader(titulo) + `<div class="panel">${cards || `<div class="empty"><div class="big">${ic("apple", "#9aa7b8")}</div><h2>Nenhum registro no último ano</h2></div>`}</div>`;
+}
+function respAlimentacao() {
+  return respHistoricoAgenda("Alimentação", "alimentacao", (arr) => arr.map((a) => `<div class="ag-view">${esc(a.refeicao || "")} — ${esc(a.horario || "—")}${a.detalhes ? " — " + esc(a.detalhes) : ""}</div>`).join(""));
+}
+function respSoninho() {
+  return respHistoricoAgenda("Soninho", "sono", (arr) => arr.map((s) => `<div class="ag-view">${esc(s.situacao || "")} — ${esc(s.horario || "—")}</div>`).join(""));
+}
+function respAtividades() {
+  const aluno = alunoRespAtual();
+  if (!aluno) return respHeader("Atividades do dia", true) + respSemFilho();
+  const e = getAgenda()[chaveAgenda(aluno.nome, agendaDataSel)] || {};
+  const texto = (e.atividades || "").trim();
+  const corpo = texto ? `<div class="resp-dia-card"><div class="ag-view">${esc(texto).replace(/\n/g, "<br>")}</div></div>` : `<div class="empty"><div class="big">${ic("clipboard", "#9aa7b8")}</div><h2>Nenhuma atividade registrada neste dia</h2></div>`;
+  return respHeader("Atividades do dia", true) + `<div class="panel">${corpo}</div>`;
+}
+function respObservacoes() {
+  const aluno = alunoRespAtual();
+  if (!aluno) return respHeader("Observações", true) + respSemFilho();
+  const e = getAgenda()[chaveAgenda(aluno.nome, agendaDataSel)] || {};
+  const texto = (e.observacoes || "").trim();
+  const hoje = new Date().toISOString().slice(0, 10);
+  const vazio = agendaDataSel === hoje ? "Nenhuma observação no dia de hoje" : "Nenhuma observação neste dia";
+  const corpo = texto ? `<div class="resp-dia-card"><div class="ag-view">${esc(texto).replace(/\n/g, "<br>")}</div></div>` : `<div class="empty"><div class="big">${ic("note", "#9aa7b8")}</div><h2>${vazio}</h2></div>`;
+  return respHeader("Observações", true) + `<div class="panel">${corpo}</div>`;
+}
+function respCardapio() {
+  const aluno = alunoRespAtual();
+  if (!aluno) return respHeader("Cardápio do dia", true) + respSemFilho();
+  const turma = turmaDoAluno(aluno.nome);
+  const [ano, mes] = agendaDataSel.split("-");
+  const lista = getCardapios().filter((c) => String(c.ano) === ano && MESES.indexOf(c.mes) === (Number(mes) - 1));
+  const cardMes = lista.find((c) => c.turma === turma) || lista[0];
+  const dia = cardMes ? (cardMes.dias || {})[agendaDataSel] : "";
+  const corpo = dia ? `<div class="resp-dia-card ag-cardapio">${dia}</div>` : `<div class="empty"><div class="big">${ic("apple", "#9aa7b8")}</div><h2>Sem cardápio para este dia</h2></div>`;
+  return respHeader("Cardápio do dia", true) + `<div class="panel">${corpo}</div>`;
+}
+function respDados() {
+  const aluno = alunoRespAtual();
+  if (!aluno) return respHeader("Dados do aluno") + respSemFilho();
+  return respHeader("Dados do aluno") + `
+    <div class="panel">
+      <div class="resp-foto-area">
+        <div class="resp-foto-grande">${aluno.foto ? `<img src="${aluno.foto}" alt="">` : iniciais(aluno.nome)}</div>
+        <button type="button" class="btn-mini-azul" data-resp-foto>${ic("camera", COR.azul)} Alterar foto</button>
+        <input type="file" id="resp-foto-input" accept="image/png,image/jpeg" hidden>
+      </div>
+      <div class="aluno-info"><span class="ai-label">Nome</span><span class="ai-val">${esc(aluno.nome)}</span></div>
+      <div class="aluno-info"><span class="ai-label">Matrícula</span><span class="ai-val">${esc(aluno.matricula || "—")}</span></div>
+      <div class="aluno-info"><span class="ai-label">RA</span><span class="ai-val">${esc(aluno.ra || "—")}</span></div>
+      <div class="aluno-info"><span class="ai-label">Data de nascimento</span><span class="ai-val">${dataBR(aluno.data_nascimento)}</span></div>
+      <div class="aluno-info"><span class="ai-label">Turma</span><span class="ai-val">${esc(turmaDoAluno(aluno.nome) || "—")}</span></div>
+      <div class="aluno-info"><span class="ai-label">Endereço</span><span class="ai-val">${esc([aluno.rua, aluno.numero, aluno.bairro].filter(Boolean).join(", ") || "—")}</span></div>
+      <div class="aluno-info"><span class="ai-label">Restrições</span><span class="ai-val">${esc(restricoesTexto(aluno) || "Nenhuma")}</span></div>
+    </div>`;
+}
+function respRecados() {
+  const aluno = alunoRespAtual();
+  if (!aluno) return respHeader("Recados") + respSemFilho();
+  const recados = recadosDoAluno(aluno.nome);
+  const lista = recados.length
+    ? recados.map((r) => `<div class="resp-dia-card"><div class="ag-view">${esc(r.texto)}</div><div class="resp-dia-data">${esc(r.data || "")} ${esc(r.hora || "")}</div></div>`).join("")
+    : `<p class="hint">Nenhum recado enviado ainda.</p>`;
+  return respHeader("Recados") + `
+    <div class="panel">
+      <div class="ag-secao-titulo">Enviar recado para a professora / auxiliar</div>
+      <textarea id="resp-recado-txt" class="ag-atividades" placeholder="Digite seu recado..."></textarea>
+      <button type="button" class="btn-laranja" id="resp-recado-enviar" style="margin-top:10px">${ic("save", "#fff")} Enviar recado</button>
+      <div class="ag-secao-titulo" style="margin-top:22px">Recados enviados</div>
+      ${lista}
+    </div>`;
+}
+
 function responsavelAgenda() {
   if (!agendaDataSel) agendaDataSel = new Date().toISOString().slice(0, 10);
   const nome = (sessao && sessao.nome) || "";
@@ -1984,25 +2280,29 @@ function calendarioCardapioView(cardapio) {
 }
 function cardapioView() {
   const lista = getCardapios();
-  if (!lista.length) {
-    return `
-      <div class="page-head"><div class="ph-left">
-        <button class="back-btn" data-goto="inicioAlmoxarife" title="Voltar">${ic("arrowLeft", COR.azul)}</button>
-        <div><div class="ph-title">Cardápio Mensal</div><div class="ph-sub">Visualização do cardápio</div></div></div></div>
-      <div class="panel"><div class="empty"><div class="big">${ic("apple", "#9aa7b8")}</div><h2>Nenhum cardápio disponível</h2><p style="margin-top:8px">A secretaria ainda não cadastrou cardápios.</p></div></div>`;
-  }
-  const sel = (viewCardapioIdx != null && lista[viewCardapioIdx]) ? viewCardapioIdx : 0;
-  const opcoes = lista.map((c, i) => `<option value="${i}" ${i === sel ? "selected" : ""}>${c.mes} / ${c.ano}</option>`).join("");
-  return `
+  const head = `
     <div class="page-head"><div class="ph-left">
       <button class="back-btn" data-goto="inicioAlmoxarife" title="Voltar">${ic("arrowLeft", COR.azul)}</button>
-      <div><div class="ph-title">Cardápio Mensal</div><div class="ph-sub">Visualização do cardápio</div></div></div></div>
+      <div><div class="ph-title">Cardápio Mensal</div><div class="ph-sub">Visualização do cardápio</div></div></div></div>`;
+  if (!lista.length) {
+    return head + `<div class="panel"><div class="empty"><div class="big">${ic("apple", "#9aa7b8")}</div><h2>Nenhum cardápio disponível</h2><p style="margin-top:8px">A secretaria ainda não cadastrou cardápios.</p></div></div>`;
+  }
+  const turmas = [...new Set(lista.map((c) => c.turma).filter(Boolean))];
+  const meses = [...new Set(lista.map((c) => `${c.mes}/${c.ano}`))];
+  const opTurma = [`<option value="Todas">Todas as turmas</option>`].concat(turmas.map((t) => `<option ${t === viewCardapioTurma ? "selected" : ""}>${esc(t)}</option>`)).join("");
+  const opMes = [`<option value="Todos">Todos os meses</option>`].concat(meses.map((m) => `<option ${m === viewCardapioMes ? "selected" : ""}>${esc(m)}</option>`)).join("");
+  const filtrados = lista.filter((c) => (viewCardapioTurma === "Todas" || c.turma === viewCardapioTurma) && (viewCardapioMes === "Todos" || `${c.mes}/${c.ano}` === viewCardapioMes));
+  const corpo = filtrados.length
+    ? filtrados.map((c) => `<div style="margin-bottom:22px"><div class="bloco-titulo">${esc(c.turma || "—")} · ${esc(c.mes)}/${c.ano}</div>${calendarioCardapioView(c)}</div>`).join("")
+    : `<div class="empty"><div class="big">${ic("apple", "#9aa7b8")}</div><h2>Nenhum cardápio para o filtro</h2></div>`;
+  return head + `
     <div class="panel">
       <div class="filtro-bar">
-        <span class="filtro-label">${ic("calendar", "#7a8aa0")} Selecione o mês</span>
-        <div class="inp filtro-inp"><select id="cardapio-view-sel">${opcoes}</select></div>
+        <span class="filtro-label">${ic("filter", "#7a8aa0")} Filtrar por</span>
+        <div class="inp filtro-inp"><select id="cardapio-view-turma">${opTurma}</select></div>
+        <div class="inp filtro-inp"><select id="cardapio-view-mes">${opMes}</select></div>
       </div>
-      ${calendarioCardapioView(lista[sel])}
+      ${corpo}
     </div>`;
 }
 
@@ -2396,6 +2696,7 @@ const PAGINAS = {
   professorAgenda: professorAgenda,
   professorTurmas: professorTurmas,
   professorAlunos: professorAlunos,
+  recados: recadosProfAux,
   // Perfil Auxiliar
   inicioAuxiliar: inicioAuxiliar,
   auxiliarAgenda: auxiliarAgenda,
@@ -2406,6 +2707,15 @@ const PAGINAS = {
   porteiroHistorico: porteiroHistorico,
   // Perfil Responsável
   responsavelAgenda: responsavelAgenda,
+  inicioResponsavel: inicioResponsavel,
+  respFrequencia: respFrequencia,
+  respAlimentacao: respAlimentacao,
+  respSoninho: respSoninho,
+  respAtividades: respAtividades,
+  respObservacoes: respObservacoes,
+  respCardapio: respCardapio,
+  respDados: respDados,
+  respRecados: respRecados,
   // Perfil Almoxarife
   inicioAlmoxarife: inicioAlmoxarife,
   estoque: paginaEstoque,
@@ -2444,11 +2754,13 @@ const MENUS = {
     { page: "inicioProfessor", ico: "home", label: "Professor" },
     { page: "professorAgenda", ico: "clipboard", label: "Agenda dos Alunos" },
     { page: "professorTurmas", ico: "users", label: "Minhas Turmas" },
+    { page: "recados", ico: "doc", label: "Recados" },
   ],
   auxiliar: [
     { page: "inicioAuxiliar", ico: "home", label: "Auxiliar" },
     { page: "auxiliarAgenda", ico: "clipboard", label: "Agenda da turma" },
     { page: "auxiliarTurmas", ico: "users", label: "Turmas" },
+    { page: "recados", ico: "doc", label: "Recados" },
   ],
   porteiro: [
     { page: "inicioPorteiro", ico: "home", label: "Porteiro" },
@@ -2462,10 +2774,10 @@ const MENUS = {
     { page: "cardapioView", ico: "apple", label: "Cardápio mensal" },
   ],
   responsavel: [
-    { page: "responsavelAgenda", ico: "clipboard", label: "Agenda" },
+    { page: "inicioResponsavel", ico: "home", label: "Início" },
   ],
 };
-const HOMES = { admin: "dashboard", secretaria: "inicioSecretaria", professor: "inicioProfessor", auxiliar: "inicioAuxiliar", porteiro: "inicioPorteiro", almoxarife: "inicioAlmoxarife", responsavel: "responsavelAgenda" };
+const HOMES = { admin: "dashboard", secretaria: "inicioSecretaria", professor: "inicioProfessor", auxiliar: "inicioAuxiliar", porteiro: "inicioPorteiro", almoxarife: "inicioAlmoxarife", responsavel: "inicioResponsavel" };
 const PERFIL = (sessao && MENUS[sessao.perfil]) ? sessao.perfil : "admin";
 const HOME = HOMES[PERFIL];
 const SAUDACAO = {
@@ -2515,14 +2827,20 @@ let editCardapioIdx = null; // índice em edição (cardápio) ou null para novo
 let cardapioDias = {}; // conteúdo por dia (ISO → HTML) no cardápio em edição
 let rtRange = null, rtEditor = null; // seleção salva do editor de texto do cardápio
 let agendaDataSel = ""; // data selecionada na agenda do professor
+let agendaTurmaSel = ""; // turma selecionada na agenda (obrigatória antes de ver os alunos)
+let respAlunoSel = "";   // filho selecionado no app do responsável
+let respMesSel = new Date().toISOString().slice(0, 7); // mês (AAAA-MM) na frequência do responsável
 let qrStream = null, qrLoop = null, qrUltimo = null; // estado da leitura de QR (porteiro)
 let editEstoqueIdx = null; // índice em edição (estoque) ou null para novo
 let retiradaIdx = null; // item selecionado para retirada
 let paginaAtual = ""; // página atualmente aberta
 let viewCardapioIdx = null; // cardápio selecionado na visualização
+let viewCardapioTurma = "Todas"; // filtro de turma no cardápio mensal (almoxarife)
+let viewCardapioMes = "Todos";   // filtro de mês no cardápio mensal (almoxarife)
+let docImgSel = null; // imagem (logo) selecionada no editor de documento
 let ultimaVerificacao = null; // resultado da última verificação de cardápio
 
-function abrir(nome) {
+function abrir(nome, viaPop) {
   pararCameraQR(); // encerra a câmera ao trocar de página
   paginaAtual = nome;
   const render = PAGINAS[nome] || PAGINAS.dashboard;
@@ -2542,7 +2860,20 @@ function abrir(nome) {
   if (nome === "formAluno") { renderRespAssociados(); renderBuscaResp(); }
   // Inicia a câmera na tela de registrar frequência
   if (nome === "porteiroFrequencia") { iniciarCameraQR(); }
+  // Registra a navegação no histórico do navegador (para o botão "voltar")
+  if (!viaPop) { try { history.pushState({ sk: true, page: nome }, ""); } catch (e) {} }
 }
+
+// Botão "voltar" do navegador: navega DENTRO do painel (não desloga).
+// Para sair do usuário, use o botão "Sair".
+window.addEventListener("popstate", (e) => {
+  if (e.state && e.state.sk && e.state.page) {
+    abrir(e.state.page, true);
+  } else {
+    abrir(HOME, true);
+    try { history.pushState({ sk: true, page: HOME }, ""); } catch (x) {}
+  }
+});
 
 // Menu lateral
 document.getElementById("nav").addEventListener("click", (e) => {
@@ -2554,6 +2885,13 @@ document.getElementById("nav").addEventListener("click", (e) => {
 page.addEventListener("click", (e) => {
   const goto = e.target.closest("[data-goto]");
   if (goto) { abrir(goto.dataset.goto); return; }
+
+  // Imprimir / salvar a lista de compras em PDF
+  if (e.target.closest("#btn-imprimir-lc")) {
+    const v = ultimaVerificacao || {};
+    imprimirListaCompra(v.faltas || [], `${v.turma || ""} · ${v.mes || ""}/${v.ano || ""}`);
+    return;
+  }
 
   const form = e.target.closest("[data-form]");
   if (form) {
@@ -2799,11 +3137,45 @@ page.addEventListener("click", (e) => {
   const addSono = e.target.closest("[data-add-sono]");
   if (addSono) { addSono.closest(".agenda-card").querySelector(".sono-lista").insertAdjacentHTML("beforeend", sonoRow({})); return; }
   const remAg = e.target.closest("[data-rem-agenda-linha]");
-  if (remAg) { remAg.closest(".ag-linha").remove(); return; }
+  if (remAg) { remAg.closest(".ag-linha").remove(); autoSalvarAgenda(); return; }
 
-  // Cardápio: botões de formatação (negrito/itálico/sublinhado)
+  // Documento: inserir logo / imagem no texto
+  if (e.target.closest("[data-doc-logo]")) { const inp = document.getElementById("doc-logo-input"); if (inp) inp.click(); return; }
+  // App do responsável: alterar foto / enviar recado
+  if (e.target.closest("[data-resp-foto]")) { const inp = document.getElementById("resp-foto-input"); if (inp) inp.click(); return; }
+  if (e.target.closest("#resp-recado-enviar")) {
+    const txt = document.getElementById("resp-recado-txt");
+    const aluno = alunoRespAtual();
+    if (txt && txt.value.trim() && aluno) {
+      const recados = getRecados();
+      const agora = new Date();
+      recados.unshift({ aluno: aluno.nome, texto: txt.value.trim(), autor: (sessao && sessao.nome) || "", dataISO: agora.toISOString().slice(0, 10), data: agora.toLocaleDateString("pt-BR"), hora: agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) });
+      setRecados(recados);
+      notificar("professor", `Novo recado do responsável de ${aluno.nome}.`);
+      notificar("auxiliar", `Novo recado do responsável de ${aluno.nome}.`);
+      alert("Recado enviado!");
+      abrir("respRecados");
+    } else { alert("Digite um recado antes de enviar."); }
+    return;
+  }
+  // Documento: selecionar imagem (para redimensionar)
+  if (e.target.tagName === "IMG" && e.target.closest("#f-texto")) { docImgSel = e.target; return; }
+  // Documento: ajustar tamanho do logo
+  const logoSz = e.target.closest("[data-logo-size]");
+  if (logoSz) {
+    const imgs = document.querySelectorAll("#f-texto img");
+    const img = docImgSel || imgs[imgs.length - 1];
+    if (!img) { alert("Insira um logo primeiro (ou clique na imagem) para ajustar o tamanho."); return; }
+    const atual = parseInt(img.style.maxWidth) || img.clientWidth || 180;
+    const novo = Math.round(logoSz.dataset.logoSize === "maior" ? Math.min(atual * 1.25, 600) : Math.max(atual * 0.8, 50));
+    img.style.maxWidth = novo + "px"; img.style.width = novo + "px";
+    docImgSel = img;
+    return;
+  }
+
+  // Formatação (cardápio e documento): negrito/itálico/sublinhado/grifar/alinhar
   const rtBtn = e.target.closest("[data-cmd]");
-  if (rtBtn) { formatar(rtBtn.dataset.cmd, null); }
+  if (rtBtn) { formatar(rtBtn.dataset.cmd, rtBtn.dataset.val || null); return; }
 });
 
 // Aplica formatação no editor de dia atualmente selecionado
@@ -2826,7 +3198,7 @@ document.addEventListener("selectionchange", () => {
   if (!sel.rangeCount) return;
   let node = sel.anchorNode;
   while (node && node.nodeType === 3) node = node.parentNode;
-  const ed = node && node.closest ? node.closest(".dia-editor") : null;
+  const ed = node && node.closest ? node.closest(".dia-editor, .doc-editor") : null;
   if (ed) { rtEditor = ed; rtRange = sel.getRangeAt(0).cloneRange(); }
 });
 
@@ -2835,16 +3207,20 @@ document.addEventListener("mousedown", (e) => {
   if (e.target.closest && e.target.closest(".rt-btn")) e.preventDefault();
 });
 
-// Insere uma etiqueta << campo >> na posição do cursor do texto do documento
+// Insere uma etiqueta << campo >> na posição do cursor do editor do documento
 function inserirNoTexto(nomeCampo) {
-  const ta = document.getElementById("f-texto");
-  if (!ta) return;
-  const tag = `<< ${nomeCampo} >>`;
-  const ini = ta.selectionStart != null ? ta.selectionStart : ta.value.length;
-  const fim = ta.selectionEnd != null ? ta.selectionEnd : ini;
-  ta.value = ta.value.slice(0, ini) + tag + ta.value.slice(fim);
-  ta.focus();
-  ta.selectionStart = ta.selectionEnd = ini + tag.length;
+  const ed = document.getElementById("f-texto");
+  if (!ed) return;
+  ed.focus();
+  if (rtEditor === ed && rtRange) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(rtRange);
+  }
+  document.execCommand("insertText", false, `<< ${nomeCampo} >>`);
+  const sel = window.getSelection();
+  if (sel.rangeCount) rtRange = sel.getRangeAt(0).cloneRange();
+  rtEditor = ed;
 }
 
 // Enter no campo personalizado insere no texto (sem enviar o formulário)
@@ -2858,8 +3234,12 @@ page.addEventListener("keydown", (e) => {
 
 // Pré-visualização da foto + Função→turmas + limite de turmas
 page.addEventListener("change", (e) => {
+  // Auto-salvar agenda ao alterar refeição/sono (sem precisar do botão Salvar)
+  if (e.target.closest(".agenda-card") || e.target.id === "ag-atividades-turma") { salvarAgendaAtual(); return; }
   // Gerenciar Usuários: filtro por tipo
   if (e.target.id === "gu-filtro") { guFiltro = e.target.value; abrir("gerenciarUsuarios"); return; }
+  // Professor: no máximo 2 turmas (bloqueia a 3ª no clique)
+  if (e.target.name === "turma-prof") { checarTurmasLive('input[name="turma-prof"]', e.target, 2); return; }
   // Foto
   if (e.target.id === "foto-input") {
     const file = e.target.files[0];
@@ -2894,6 +3274,26 @@ page.addEventListener("change", (e) => {
   if (e.target.id === "cardapio-fonte") { if (e.target.value) formatar("fontName", e.target.value); e.target.selectedIndex = 0; return; }
   if (e.target.id === "cardapio-tamanho") { if (e.target.value) formatar("fontSize", e.target.value); e.target.selectedIndex = 0; return; }
   if (e.target.id === "cardapio-cor") { formatar("foreColor", e.target.value); return; }
+  // Documento: formatação (tamanho, cor, logo)
+  if (e.target.id === "doc-tamanho") { if (e.target.value) formatar("fontSize", e.target.value); e.target.selectedIndex = 0; return; }
+  if (e.target.id === "doc-cor") { formatar("foreColor", e.target.value); return; }
+  if (e.target.id === "doc-logo-input") {
+    const file = e.target.files[0]; if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert("A imagem deve ter até 2MB."); e.target.value = ""; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const ed = document.getElementById("f-texto");
+      if (ed) {
+        ed.focus();
+        if (rtEditor === ed && rtRange) { const s = window.getSelection(); s.removeAllRanges(); s.addRange(rtRange); }
+        document.execCommand("insertHTML", false, `<img src="${reader.result}" style="max-width:180px;width:180px;height:auto;display:block;margin:8px 0">`);
+        const imgs = document.querySelectorAll("#f-texto img"); docImgSel = imgs[imgs.length - 1] || null;
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+    return;
+  }
   // Cardápio: troca de mês/ano regenera o calendário (preservando o que já foi digitado)
   if (e.target.id === "cardapio-mes" || e.target.id === "cardapio-ano") {
     salvarDiasCardapio();
@@ -2913,17 +3313,43 @@ page.addEventListener("change", (e) => {
     abrir("restricoes");
     return;
   }
-  // Almoxarife: troca de mês na visualização do cardápio
-  if (e.target.id === "cardapio-view-sel") {
-    viewCardapioIdx = Number(e.target.value);
-    abrir("cardapioView");
+  // Almoxarife: filtros do cardápio mensal (turma e mês)
+  if (e.target.id === "cardapio-view-turma") { viewCardapioTurma = e.target.value; abrir("cardapioView"); return; }
+  if (e.target.id === "cardapio-view-mes") { viewCardapioMes = e.target.value; abrir("cardapioView"); return; }
+  // Troca de turma da agenda (filtro obrigatório antes de ver os alunos)
+  if (e.target.id === "agenda-turma") {
+    if (agendaTurmaSel && (paginaAtual === "professorAgenda" || paginaAtual === "auxiliarAgenda")) salvarAgendaAtual();
+    agendaTurmaSel = e.target.value;
+    abrir(paginaAtual);
     return;
   }
   // Troca de data da agenda (salva a atual só se for tela editável)
   if (e.target.id === "agenda-data") {
-    if (paginaAtual === "professorAgenda" || paginaAtual === "auxiliarAgenda") salvarAgendaAtual();
+    if (agendaTurmaSel && (paginaAtual === "professorAgenda" || paginaAtual === "auxiliarAgenda")) salvarAgendaAtual();
     agendaDataSel = e.target.value;
     abrir(paginaAtual);
+    return;
+  }
+  // App do responsável: filtros e foto
+  if (e.target.id === "resp-filho") { respAlunoSel = e.target.value; abrir(paginaAtual); return; }
+  if (e.target.id === "resp-data") { agendaDataSel = e.target.value; abrir(paginaAtual); return; }
+  if (e.target.id === "resp-mes-mes" || e.target.id === "resp-mes-ano") {
+    const mm = document.getElementById("resp-mes-mes").value;
+    const ano = document.getElementById("resp-mes-ano").value;
+    respMesSel = ano + "-" + mm;
+    abrir(paginaAtual);
+    return;
+  }
+  if (e.target.id === "resp-foto-input") {
+    const file = e.target.files[0]; if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { alert("A imagem deve ter até 2MB."); e.target.value = ""; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const alunos = getAlunos();
+      const i = alunos.findIndex((a) => a.nome === respAlunoSel);
+      if (i >= 0) { alunos[i].foto = reader.result; setAlunos(alunos); abrir("respDados"); }
+    };
+    reader.readAsDataURL(file);
     return;
   }
 
@@ -2950,18 +3376,14 @@ page.addEventListener("change", (e) => {
     return;
   }
 
-  // Limite de turmas do auxiliar
-  if (e.target.name === "turma") {
-    const marcadas = document.querySelectorAll('input[name="turma"]:checked');
-    if (marcadas.length > MAX_TURMAS_AUXILIAR) {
-      e.target.checked = false;
-      alert(`Um auxiliar pode ter no máximo ${MAX_TURMAS_AUXILIAR} turmas.`);
-    }
-  }
+  // Limite e regras de período das turmas do auxiliar
+  if (e.target.name === "turma") { checarTurmasLive('input[name="turma"]', e.target, MAX_TURMAS_AUXILIAR); }
 });
 
 // Digitação nas buscas (turma → alunos, aluno → responsáveis)
 page.addEventListener("input", (e) => {
+  // Auto-salvar agenda ao digitar (sem precisar do botão Salvar)
+  if (e.target.closest(".agenda-card") || e.target.id === "ag-atividades-turma") { autoSalvarAgenda(); return; }
   if (e.target.id === "busca-aluno") renderBuscaResultados();
   if (e.target.id === "busca-resp") renderBuscaResp();
 });
@@ -2991,9 +3413,11 @@ page.addEventListener("submit", (e) => {
     e.preventDefault();
     const funcao = val("f-funcao");
     const turmas = [...document.querySelectorAll('input[name="turma"]:checked')].map((c) => c.value);
-    if (funcao === "Auxiliar" && turmas.length === 0) {
-      alert("Selecione ao menos 1 turma para o auxiliar.");
-      return;
+    if (funcao === "Auxiliar") {
+      if (turmas.length === 0) { alert("Selecione ao menos 1 turma para o auxiliar."); return; }
+      if (turmas.length > MAX_TURMAS_AUXILIAR) { alert(`Um auxiliar pode ter no máximo ${MAX_TURMAS_AUXILIAR} turmas.`); return; }
+      const erroAux = validarTurmasPeriodo(turmas);
+      if (erroAux) { alert(erroAux); return; }
     }
     const reg = {
       nome: val("f-nome"), cpf: val("f-cpf"), email: val("f-email"),
@@ -3017,6 +3441,9 @@ page.addEventListener("submit", (e) => {
       alert("Selecione ao menos 1 turma para o professor.");
       return;
     }
+    if (turmas.length > 2) { alert("Um professor pode ter no máximo 2 turmas."); return; }
+    const erroPeriodo = validarTurmasPeriodo(turmas);
+    if (erroPeriodo) { alert(erroPeriodo); return; }
     const reg = {
       nome: val("f-nome"), cpf: val("f-cpf"), email: val("f-email"),
       telefone: val("f-telefone"), cep: val("f-cep"), rua: val("f-rua"),
@@ -3097,31 +3524,37 @@ page.addEventListener("submit", (e) => {
     const itens = [...document.querySelectorAll(".cardapio-item-row")]
       .map((r) => ({ alimento: r.querySelector(".ci-alimento").value, quantidade: Number(r.querySelector(".ci-qtd").value) || 0 }))
       .filter((x) => x.alimento);
-    const reg = {
-      turma, mes: document.getElementById("cardapio-mes").value,
-      ano: Number(document.getElementById("cardapio-ano").value), itens, dias: cardapioDias,
-    };
+    // RF-15: NÃO salva se algum aluno da turma tiver restrição a um alimento do cardápio
+    const conflitos = verificarRestricoes(turma, itens);
+    if (conflitos.length) {
+      notificar("secretaria", `Cardápio de ${turma} não salvo: ${conflitos.length} aluno(s) com restrição a alimentos inseridos.`);
+      alert(
+        "Não foi possível salvar o cardápio.\n\nHá aluno(s) com restrição a alimentos inseridos:\n" +
+        conflitos.map((c) => "• " + c.aluno + " — " + c.alimento).join("\n") +
+        "\n\nRemova esses alimentos do cardápio para poder salvar."
+      );
+      return; // mantém o formulário com os dados preenchidos
+    }
+
+    // Sem restrições: salva o cardápio
+    const mes = document.getElementById("cardapio-mes").value;
+    const ano = Number(document.getElementById("cardapio-ano").value);
+    const reg = { turma, mes, ano, itens, dias: cardapioDias };
     const lista = getCardapios();
     if (editCardapioIdx != null) lista[editCardapioIdx] = reg; else lista.push(reg);
     setCardapios(lista);
     editCardapioIdx = null;
 
-    // RF-14 e RF-15: verificações automáticas
-    const conflitos = verificarRestricoes(turma, itens);
+    // RF-14: se faltar estoque, gera lista de compras e notifica o almoxarife
     const faltas = verificarEstoque(itens);
-    // Registra alertas (RF-15) e lista de compra (RF-14)
-    const agora = new Date().toLocaleString("pt-BR");
-    if (conflitos.length) {
-      const al = getAlertas();
-      conflitos.forEach((c) => al.unshift({ tipo: "Restrição", turma, aluno: c.aluno, alimento: c.alimento, mensagem: `${c.aluno} tem restrição a "${c.alimento}"`, data: agora }));
-      setAlertas(al);
-    }
     if (faltas.length) {
+      const agora = new Date().toLocaleDateString("pt-BR");
       const lc = getListaCompra();
       faltas.forEach((f) => lc.unshift({ turma, alimento: f.alimento, necessario: f.necessario, disponivel: f.disponivel, falta: f.falta, unidade: f.unidade, data: agora, status: "Pendente" }));
       setListaCompra(lc);
+      notificar("almoxarife", `Lista de compra gerada para o cardápio de ${turma}: ${faltas.length} item(ns) em falta.`);
     }
-    ultimaVerificacao = { turma, mes: reg.mes, ano: reg.ano, conflitos, faltas };
+    ultimaVerificacao = { turma, mes, ano, faltas, salvo: true };
     abrir("cardapioVerificacao");
     return;
   }
@@ -3130,7 +3563,7 @@ page.addEventListener("submit", (e) => {
     e.preventDefault();
     const reg = {
       nome: val("f-nome"), descricao: val("f-descricao"),
-      campos: docCampos.slice(), texto: document.getElementById("f-texto").value,
+      campos: docCampos.slice(), texto: document.getElementById("f-texto").innerHTML,
       assinatura: docAssinatura,
     };
     const lista = getDocumentos();
@@ -3189,16 +3622,17 @@ page.addEventListener("submit", (e) => {
     const restricoes = [...document.querySelectorAll(".restricao-row")]
       .map((r) => ({ alimento: r.querySelector(".r-alimento").value.trim(), gravidade: r.querySelector(".r-gravidade").value }))
       .filter((x) => x.alimento);
-    const qrExistente = (editAlunoIdx != null && getAlunos()[editAlunoIdx]) ? getAlunos()[editAlunoIdx].qr_code : "";
+    const alunoAnterior = (editAlunoIdx != null && getAlunos()[editAlunoIdx]) ? getAlunos()[editAlunoIdx] : {};
     const reg = {
       nome: val("f-nome"), cpf: val("f-cpf"), data_nascimento: val("f-nascimento"),
+      ra: val("f-ra"), matricula: alunoAnterior.matricula || gerarMatricula(),
       cep: val("f-cep"), rua: val("f-rua"), bairro: val("f-bairro"), numero: val("f-numero"), complemento: val("f-complemento"),
       responsaveis: alunoResponsaveis.slice(), restricoes, informacoes_medicas: val("f-medicas"),
-      emergencia, autorizados, qr_code: qrExistente || gerarQRCode(),
+      emergencia, autorizados, qr_code: alunoAnterior.qr_code || gerarQRCode(),
     };
     const lista = getAlunos();
     if (editAlunoIdx != null) { lista[editAlunoIdx] = reg; alert("Aluno atualizado com sucesso!"); }
-    else { lista.push(reg); alert("Aluno cadastrado com sucesso!"); }
+    else { lista.push(reg); alert("Aluno cadastrado com sucesso!\nNúmero de matrícula: " + reg.matricula); }
     setAlunos(lista);
     editAlunoIdx = null;
     abrir("alunos");
@@ -3225,6 +3659,110 @@ abrir = function (nome) {
   if (nome === "formTurma") { renderAlunosAssociados(); renderBuscaResultados(); }
 };
 
+/* ===== Notificações (sininho do topo) ===== */
+// Cria uma notificação direcionada a um perfil (admin, secretaria, almoxarife...)
+function notificar(perfil, mensagem) {
+  const notis = getNotificacoes();
+  const agora = new Date();
+  notis.unshift({ perfil, mensagem, lida: false,
+    data: agora.toLocaleDateString("pt-BR"),
+    hora: agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) });
+  setNotificacoes(notis);
+}
+// Notificações do usuário logado (responsável vê as do filho; demais, as do seu perfil)
+function notificacoesDoUsuario() {
+  const todas = getNotificacoes();
+  const nome = (sessao && sessao.nome) || "";
+  if (PERFIL === "responsavel") return todas.filter((n) => n.responsavel === nome);
+  return todas.filter((n) => n.perfil === PERFIL);
+}
+function atualizarSino() {
+  const badge = document.getElementById("sino-badge");
+  if (!badge) return;
+  const n = notificacoesDoUsuario().filter((x) => !x.lida).length;
+  badge.textContent = n > 9 ? "9+" : String(n);
+  badge.hidden = n === 0;
+}
+// Popup de notificação (aparece para o responsável ao registrar entrada/saída)
+let ultimaNotifSeen = -1;
+function popupNotificacao(n) {
+  const cor = (n.tipo === "Saída") ? "#b25a12" : "#1c8055";
+  const div = document.createElement("div");
+  div.className = "qr-popup-overlay";
+  div.innerHTML = `<div class="qr-popup">
+    <div class="qr-popup-ico" style="background:${cor}">${ic(n.tipo === "Saída" ? "arrowUp" : "arrowDown", "#fff")}</div>
+    <div class="qr-popup-tipo" style="color:${cor};font-size:20px">Notificação</div>
+    <div class="qr-popup-pessoa">${esc(n.mensagem || "")}</div>
+    <div class="qr-popup-hora">${esc(((n.data || "") + " " + (n.hora || "")).trim())}</div>
+    <button class="btn-salvar" style="background:${cor}" data-fechar-popup>OK</button>
+  </div>`;
+  document.body.appendChild(div);
+  div.addEventListener("click", (e) => { if (e.target === div || e.target.closest("[data-fechar-popup]")) div.remove(); });
+}
+function checarNotificacoesNovas() {
+  const lista = notificacoesDoUsuario();
+  atualizarSino();
+  if (PERFIL !== "responsavel") { ultimaNotifSeen = lista.length; return; }
+  if (ultimaNotifSeen < 0) { ultimaNotifSeen = lista.length; return; } // 1ª vez: não popa os antigos
+  if (lista.length > ultimaNotifSeen && lista[0]) popupNotificacao(lista[0]);
+  ultimaNotifSeen = lista.length;
+}
+// Entre abas do mesmo navegador (tempo real)
+window.addEventListener("storage", (e) => { if (e.key === "saykids_notificacoes") checarNotificacoesNovas(); });
+// Poll do servidor (captura registros feitos em outro computador)
+setInterval(() => {
+  if (!window.__DB_ONLINE) return;
+  try {
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "http://localhost:3000/api/stores", true);
+    xhr.onload = () => {
+      if (xhr.status !== 200) return;
+      try {
+        const stores = JSON.parse(xhr.responseText || "{}");
+        if (stores.saykids_notificacoes) {
+          const novo = JSON.stringify(stores.saykids_notificacoes);
+          if (novo !== localStorage.getItem("saykids_notificacoes")) {
+            localStorage.setItem("saykids_notificacoes", novo);
+            checarNotificacoesNovas();
+          }
+        }
+      } catch (err) {}
+    };
+    xhr.send();
+  } catch (err) {}
+}, 12000);
+(function initSino() {
+  const sino = document.getElementById("sino");
+  if (!sino) return;
+  sino.addEventListener("click", (e) => {
+    if (e.target.closest("#noti-dropdown")) return;
+    const dd = document.getElementById("noti-dropdown");
+    if (!dd.hidden) { dd.hidden = true; return; }
+    const lista = notificacoesDoUsuario();
+    dd.innerHTML = `<div class="noti-head">Notificações</div>` + (lista.length
+      ? lista.slice(0, 30).map((n) => `
+          <div class="noti-item${n.lida ? "" : " nova"}">
+            <div class="noti-msg">${esc(n.mensagem || n.titulo || "")}</div>
+            <div class="noti-time">${esc(((n.data || "") + " " + (n.hora || "")).trim())}</div>
+          </div>`).join("")
+      : `<div class="noti-vazio">Nenhuma notificação no momento.</div>`);
+    dd.hidden = false;
+    // marca como lidas
+    const nome = (sessao && sessao.nome) || "";
+    const todas = getNotificacoes();
+    todas.forEach((n) => {
+      if ((PERFIL === "responsavel" && n.responsavel === nome) || (PERFIL !== "responsavel" && n.perfil === PERFIL)) n.lida = true;
+    });
+    setNotificacoes(todas);
+    atualizarSino();
+  });
+  document.addEventListener("click", (e) => {
+    const dd = document.getElementById("noti-dropdown");
+    if (dd && !dd.hidden && !e.target.closest("#sino")) dd.hidden = true;
+  });
+})();
+
 // Monta o menu conforme o perfil e abre a página inicial
 montarMenu();
 abrir(HOME);
+checarNotificacoesNovas();

@@ -1,0 +1,11 @@
+{
+  "name": "say-kids",
+  "version": "1.0.0",
+  "description": "Sistema de Gestao Escolar de Educacao Infantil - Say Kids",
+  "scripts": {
+    "test": "jest"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}
