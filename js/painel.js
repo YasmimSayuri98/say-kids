@@ -259,6 +259,74 @@ function setNotificacoes(arr) { localStorage.setItem("saykids_notificacoes", JSO
 function getRecados() { const s = localStorage.getItem("saykids_recados"); try { return s ? JSON.parse(s) : []; } catch (e) { return []; } }
 function setRecados(arr) { localStorage.setItem("saykids_recados", JSON.stringify(arr)); }
 function recadosDoAluno(nome) { return getRecados().filter((r) => r.aluno === nome); }
+
+/* ---------------------------------------------------------------------
+   Renomear SEM perder vínculos: quando o nome de um aluno, responsável
+   ou turma muda, atualiza TODOS os lugares que apontam para aquele nome.
+   Assim nenhum vínculo (filhos, turmas, agenda, recados, etc.) se perde.
+   --------------------------------------------------------------------- */
+function renomearVinculos(tipo, antigo, novo) {
+  if (!antigo || !novo || antigo === novo) return;
+  var trocar = function (arr) { return arr.map(function (n) { return n === antigo ? novo : n; }); };
+
+  if (tipo === "aluno") {
+    var turmas = getTurmas(), m = false;
+    turmas.forEach(function (t) { if (t.alunos && t.alunos.indexOf(antigo) > -1) { t.alunos = trocar(t.alunos); m = true; } });
+    if (m) setTurmas(turmas);
+
+    var rec = getRecados(), m2 = false;
+    rec.forEach(function (r) { if (r.aluno === antigo) { r.aluno = novo; m2 = true; } });
+    if (m2) setRecados(rec);
+
+    var fr = getFrequencia(), m3 = false;
+    fr.forEach(function (f) { if (f.pessoa === antigo) { f.pessoa = novo; m3 = true; } });
+    if (m3) setFrequencia(fr);
+
+    var em = getEmissoes(), m4 = false;
+    em.forEach(function (x) { if (x.aluno === antigo) { x.aluno = novo; m4 = true; } });
+    if (m4) setEmissoes(em);
+
+    var nt = getNotificacoes(), m5 = false;
+    nt.forEach(function (n) { if (n.aluno === antigo) { n.aluno = novo; m5 = true; } });
+    if (m5) setNotificacoes(nt);
+
+    // Agenda é indexada por "aluno||data" -> renomeia essas chaves
+    var ag = getAgenda(), m6 = false;
+    Object.keys(ag).forEach(function (k) {
+      var sep = k.indexOf("||");
+      if (sep > -1 && k.slice(0, sep) === antigo) { ag[novo + k.slice(sep)] = ag[k]; delete ag[k]; m6 = true; }
+    });
+    if (m6) setAgenda(ag);
+  }
+
+  else if (tipo === "responsavel") {
+    var alunos = getAlunos(), r1 = false;
+    alunos.forEach(function (a) { if (a.responsaveis && a.responsaveis.indexOf(antigo) > -1) { a.responsaveis = trocar(a.responsaveis); r1 = true; } });
+    if (r1) setAlunos(alunos);
+
+    var rc = getRecados(), r2 = false;
+    rc.forEach(function (r) { if (r.autor === antigo) { r.autor = novo; r2 = true; } });
+    if (r2) setRecados(rc);
+
+    var n2 = getNotificacoes(), r3 = false;
+    n2.forEach(function (n) { if (n.responsavel === antigo) { n.responsavel = novo; r3 = true; } });
+    if (r3) setNotificacoes(n2);
+  }
+
+  else if (tipo === "turma") {
+    var profs = getProfessores(), t1 = false;
+    profs.forEach(function (p) { if (p.turmas && p.turmas.indexOf(antigo) > -1) { p.turmas = trocar(p.turmas); t1 = true; } });
+    if (t1) setProfessores(profs);
+
+    var cols = getColaboradores(), t2 = false;
+    cols.forEach(function (c) { if (c.turmas && c.turmas.indexOf(antigo) > -1) { c.turmas = trocar(c.turmas); t2 = true; } });
+    if (t2) setColaboradores(cols);
+
+    var cds = getCardapios(), t3 = false;
+    cds.forEach(function (c) { if (c.turma === antigo) { c.turma = novo; t3 = true; } });
+    if (t3) setCardapios(cds);
+  }
+}
 /* Data do recado em formato ISO (AAAA-MM-DD), a partir do dataISO ou da data BR */
 function recadoISO(r) { return Regras.recadoISO(r); }
 /* RF-09: cria notificação aos responsáveis do aluno ao registrar entrada/saída */
@@ -3604,8 +3672,12 @@ page.addEventListener("submit", (e) => {
       sala: val("f-sala"), alunos: turmaAlunos.slice(),
     };
     const lista = getTurmas();
-    if (editTurmaIdx != null) { lista[editTurmaIdx] = reg; aviso("Turma atualizada com sucesso!"); }
-    else { lista.push(reg); aviso("Turma cadastrada com sucesso!"); }
+    if (editTurmaIdx != null) {
+      const nomeAntigo = lista[editTurmaIdx] && lista[editTurmaIdx].nome;
+      lista[editTurmaIdx] = reg;
+      renomearVinculos("turma", nomeAntigo, reg.nome); // mantém professores, auxiliares e cardápios vinculados
+      aviso("Turma atualizada com sucesso!");
+    } else { lista.push(reg); aviso("Turma cadastrada com sucesso!"); }
     setTurmas(lista);
     editTurmaIdx = null;
     abrir("turmas");
@@ -3736,8 +3808,12 @@ page.addEventListener("submit", (e) => {
       bairro: val("f-bairro"), numero: val("f-numero"), complemento: val("f-complemento"),
     };
     const lista = getResponsaveis();
-    if (editRespIdx != null) { lista[editRespIdx] = reg; aviso("Responsável atualizado com sucesso!"); }
-    else { lista.push(reg); aviso("Responsável cadastrado com sucesso!"); }
+    if (editRespIdx != null) {
+      const nomeAntigo = lista[editRespIdx] && lista[editRespIdx].nome;
+      lista[editRespIdx] = reg;
+      renomearVinculos("responsavel", nomeAntigo, reg.nome); // mantém os vínculos ao renomear
+      aviso("Responsável atualizado com sucesso!");
+    } else { lista.push(reg); aviso("Responsável cadastrado com sucesso!"); }
     setResponsaveis(lista);
     editRespIdx = null;
     { const dest = voltar("responsaveis"); voltarGU = false; abrir(dest); }
@@ -3764,8 +3840,11 @@ page.addEventListener("submit", (e) => {
       emergencia, autorizados, qr_code: alunoAnterior.qr_code || gerarQRCode(),
     };
     const lista = getAlunos();
-    if (editAlunoIdx != null) { lista[editAlunoIdx] = reg; aviso("Aluno atualizado com sucesso!"); }
-    else { lista.push(reg); aviso("Aluno cadastrado com sucesso!\nNúmero de matrícula: " + reg.matricula); }
+    if (editAlunoIdx != null) {
+      lista[editAlunoIdx] = reg;
+      renomearVinculos("aluno", alunoAnterior.nome, reg.nome); // mantém turmas, agenda, recados, frequência, etc.
+      aviso("Aluno atualizado com sucesso!");
+    } else { lista.push(reg); aviso("Aluno cadastrado com sucesso!\nNúmero de matrícula: " + reg.matricula); }
     setAlunos(lista);
     editAlunoIdx = null;
     abrir("alunos");
