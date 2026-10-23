@@ -62,7 +62,9 @@
   // 2) Write-through: toda escrita nos dados do sistema tambem vai para o Supabase (upsert)
   var _set = localStorage.setItem.bind(localStorage);
   localStorage.setItem = function (key, val) {
-    _set(key, val);
+    // O armazenamento local pode falhar (ex.: Safari em modo privado no iPhone).
+    // Se falhar, NÃO impedimos o envio ao banco — o dado precisa chegar ao Supabase.
+    try { _set(key, val); } catch (e) {}
     if (!ignorar(key)) {
       try {
         var payload;
