@@ -2413,10 +2413,7 @@ function porteiroFrequencia() {
       </div>
     </div>
     <div class="panel qr-panel">
-      <div class="qr-video-wrap">
-        <video id="qr-video" playsinline muted></video>
-        <div class="qr-frame"></div>
-      </div>
+      <div id="qr-reader" class="qr-reader"></div>
       <div id="qr-status" class="qr-status">Iniciando a câmera...</div>
       <div class="qr-manual">
         <div class="qr-manual-titulo">Leitura manual (caso a câmera não abra)</div>
@@ -2454,68 +2451,39 @@ function porteiroHistorico() {
 
 /* ----- Câmera + QR + processamento do registro ----- */
 function pararCameraQR() {
-  if (qrLoop) { clearInterval(qrLoop); qrLoop = null; }
-  if (qrRAF) { cancelAnimationFrame(qrRAF); qrRAF = null; }
-  if (qrStream) { qrStream.getTracks().forEach((t) => t.stop()); qrStream = null; }
+  if (qrReader) {
+    try {
+      qrReader.stop().then(function () { try { qrReader.clear(); } catch (e) {} qrReader = null; })
+        .catch(function () { qrReader = null; });
+    } catch (e) { qrReader = null; }
+  }
 }
-async function iniciarCameraQR() {
-  const video = document.getElementById("qr-video");
+function iniciarCameraQR() {
   const status = document.getElementById("qr-status");
-  if (!video) return;
-  // Atributos necessários para o iPhone/Safari exibir e tocar o vídeo inline
-  video.setAttribute("playsinline", "");
-  video.setAttribute("webkit-playsinline", "");
-  video.setAttribute("autoplay", "");
-  video.muted = true;
-  try {
-    qrStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } }, audio: false,
+  const alvo = document.getElementById("qr-reader");
+  if (!alvo) return;
+  if (!window.Html5Qrcode) {
+    if (status) status.textContent = "Leitor de QR não carregou. Use a leitura manual abaixo.";
+    return;
+  }
+  // Função chamada a cada QR lido com sucesso
+  const aoLer = (texto) => { processarQR(texto); };
+
+  qrReader = new window.Html5Qrcode("qr-reader", { verbose: false });
+  const config = { fps: 10, qrbox: { width: 230, height: 230 }, aspectRatio: 1.0 };
+
+  // Tenta a câmera traseira (environment); se falhar, usa qualquer câmera disponível.
+  qrReader.start({ facingMode: { exact: "environment" } }, config, aoLer)
+    .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno."; })
+    .catch(() => {
+      qrReader.start({ facingMode: "environment" }, config, aoLer)
+        .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno."; })
+        .catch(() => {
+          qrReader.start(true, config, aoLer) // true = primeira câmera disponível
+            .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno."; })
+            .catch(() => { if (status) status.textContent = "Não foi possível abrir a câmera. Permita o acesso ou use a leitura manual abaixo."; });
+        });
     });
-    video.srcObject = qrStream;
-    await video.play();
-    status.textContent = "Câmera ativa. Aponte para o QR Code do aluno.";
-  } catch (e) {
-    status.textContent = "Não foi possível abrir a câmera. Use a leitura manual abaixo.";
-    return;
-  }
-
-  // 1) Leitor nativo (Chrome/Edge/Android) quando disponível — rápido
-  if ("BarcodeDetector" in window) {
-    const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-    qrLoop = setInterval(async () => {
-      try {
-        const codes = await detector.detect(video);
-        if (codes && codes.length) processarQR(codes[0].rawValue);
-      } catch (e) {}
-    }, 400);
-    return;
-  }
-
-  // 2) Fallback universal (iPhone/Safari e outros): jsQR lendo os quadros do vídeo
-  if (window.jsQR) {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    const tick = () => {
-      if (!qrStream) return; // câmera parada
-      if (video.readyState >= 2 && video.videoWidth) {
-        // Reduz o quadro (máx. ~640px) — bem mais rápido e confiável no celular
-        const escala = Math.min(1, 640 / video.videoWidth);
-        canvas.width = Math.round(video.videoWidth * escala);
-        canvas.height = Math.round(video.videoHeight * escala);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        try {
-          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const code = window.jsQR(img.data, img.width, img.height, { inversionAttempts: "attemptBoth" });
-          if (code && code.data) processarQR(code.data);
-        } catch (e) {}
-      }
-      qrRAF = requestAnimationFrame(tick);
-    };
-    qrRAF = requestAnimationFrame(tick);
-    return;
-  }
-
-  status.textContent = "Leitura automática indisponível neste navegador. Use a leitura manual abaixo.";
 }
 function processarQR(valor) {
   let pessoa = (valor || "").trim();
@@ -3051,7 +3019,7 @@ let agendaDataSel = ""; // data selecionada na agenda do professor
 let agendaTurmaSel = ""; // turma selecionada na agenda (obrigatória antes de ver os alunos)
 let respAlunoSel = "";   // filho selecionado no app do responsável
 let respMesSel = new Date().toISOString().slice(0, 7); // mês (AAAA-MM) na frequência do responsável
-let qrStream = null, qrLoop = null, qrRAF = null, qrUltimo = null; // estado da leitura de QR (porteiro)
+let qrReader = null, qrUltimo = null; // estado da leitura de QR (porteiro) - html5-qrcode
 let editEstoqueIdx = null; // índice em edição (estoque) ou null para novo
 let retiradaIdx = null; // item selecionado para retirada
 let paginaAtual = ""; // página atualmente aberta
@@ -4000,3 +3968,11 @@ setInterval(() => {
 montarMenu();
 abrir(HOME);
 checarNotificacoesNovas();
+
+// Quando os dados do Supabase terminam de carregar (assíncrono), re-renderiza
+// a página atual para mostrar os dados já atualizados (sem travar a tela).
+window.__onDadosCarregados = function () {
+  try { montarMenu(); } catch (e) {}
+  try { if (paginaAtual) abrir(paginaAtual, true); } catch (e) {}
+  try { atualizarSino(); } catch (e) {}
+};

@@ -400,15 +400,13 @@ tr:hover td { background: #fafcff; }
 
 /* Porteiro: scanner de QR + pop-up */
 .qr-panel { max-width: 560px; margin: 0 auto; text-align: center; }
-.qr-video-wrap {
-  position: relative; width: 100%; max-width: 420px; margin: 0 auto; aspect-ratio: 1/1;
+/* Leitor de QR da câmera (biblioteca html5-qrcode) */
+.qr-reader {
+  width: 100%; max-width: 360px; margin: 0 auto;
   background: #0e1b30; border-radius: 16px; overflow: hidden;
 }
-.qr-video-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
-.qr-frame {
-  position: absolute; inset: 18%; border: 3px solid rgba(255,255,255,.9); border-radius: 14px;
-  box-shadow: 0 0 0 100vmax rgba(0,0,0,.25); pointer-events: none;
-}
+.qr-reader video { width: 100% !important; height: auto !important; display: block; border-radius: 16px; }
+.qr-reader img { display: none; } /* esconde o ícone padrão da biblioteca */
 .qr-status { margin: 16px 0 4px; color: var(--texto-suave); font-weight: 700; font-size: 14px; }
 .qr-manual { margin-top: 22px; border-top: 1px solid var(--borda); padding-top: 18px; text-align: left; }
 .qr-manual-titulo { font-weight: 800; color: var(--azul-titulo); font-size: 14px; margin-bottom: 10px; }
