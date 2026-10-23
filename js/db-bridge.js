@@ -1,17 +1,23 @@
 /* =====================================================================
-   Ponte com o Banco de Dados (MySQL)  -  Say Kids
+   Ponte com o Banco de Dados (Supabase)  -  Say Kids
    ---------------------------------------------------------------------
    Como funciona:
-   1) Ao abrir o sistema, baixa TODOS os dados do banco e coloca no
-      armazenamento local (para as telas lerem normalmente).
+   1) Ao abrir o sistema, baixa TODOS os dados do banco (tabela app_store)
+      e coloca no armazenamento local (para as telas lerem normalmente).
    2) Toda vez que o sistema salva algo (saykids_*), envia junto para o
-      banco MySQL (persistencia real, compartilhada entre computadores).
+      Supabase (persistencia real, compartilhada entre dispositivos).
    Obs.: as chaves de sessao (login por aba) NAO vao para o banco.
-   Se o servidor estiver desligado, o sistema continua funcionando
+   Se o Supabase estiver inacessivel, o sistema continua funcionando
    apenas com os dados locais (modo offline).
+
+   Seguranca: a chave abaixo e a chave PUBLICA (anon) do Supabase. Ela e
+   feita para ficar exposta no site; o acesso e controlado pelas regras
+   (Row Level Security) definidas na tabela app_store.
    ===================================================================== */
 (function () {
-  var API = "http://localhost:3000";      // endereco do servidor (backend)
+  var SUPABASE_URL = "https://fggvhipbqfmzmhopnlqa.supabase.co";
+  var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZnZ3ZoaXBicWZtem1ob3BubHFhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI3NzQyMzksImV4cCI6MjEwODM1MDIzOX0.8iS-SsBUUqKADM5wTQnDPiWodDY02dkpb7MKEaRAHNA";
+  var REST = SUPABASE_URL + "/rest/v1/app_store";
   var IGNORAR = ["saykids_sess", "saykids_email"]; // nao sincronizar (sessao)
 
   function ignorar(key) {
@@ -22,34 +28,50 @@
     return false;
   }
 
-  // 1) Carrega os dados do banco ANTES do sistema iniciar (sincrono de proposito)
+  function cabecalhos(x, comConteudo) {
+    x.setRequestHeader("apikey", SUPABASE_KEY);
+    x.setRequestHeader("Authorization", "Bearer " + SUPABASE_KEY);
+    if (comConteudo) {
+      x.setRequestHeader("Content-Type", "application/json");
+      x.setRequestHeader("Prefer", "resolution=merge-duplicates"); // upsert
+    }
+  }
+
+  // 1) Carrega os dados do Supabase ANTES do sistema iniciar (sincrono de proposito)
   try {
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", API + "/api/stores", false);
+    xhr.open("GET", REST + "?select=store_key,payload", false);
+    cabecalhos(xhr, false);
     xhr.send(null);
-    if (xhr.status === 200) {
-      var stores = JSON.parse(xhr.responseText || "{}");
-      Object.keys(stores).forEach(function (k) {
-        try { localStorage.setItem(k, JSON.stringify(stores[k])); } catch (e) {}
+    if (xhr.status >= 200 && xhr.status < 300) {
+      var rows = JSON.parse(xhr.responseText || "[]");
+      rows.forEach(function (row) {
+        try { localStorage.setItem(row.store_key, JSON.stringify(row.payload)); } catch (e) {}
       });
       window.__DB_ONLINE = true;
-      console.log("[Say Kids] Conectado ao banco de dados MySQL.");
+      console.log("[Say Kids] Conectado ao banco de dados Supabase.");
+    } else {
+      window.__DB_ONLINE = false;
+      console.warn("[Say Kids] Supabase respondeu " + xhr.status + " - usando dados locais.");
     }
   } catch (e) {
     window.__DB_ONLINE = false;
     console.warn("[Say Kids] Banco offline - usando dados locais.", e && e.message);
   }
 
-  // 2) Write-through: toda escrita nos dados do sistema tambem vai para o banco
+  // 2) Write-through: toda escrita nos dados do sistema tambem vai para o Supabase (upsert)
   var _set = localStorage.setItem.bind(localStorage);
   localStorage.setItem = function (key, val) {
     _set(key, val);
     if (!ignorar(key)) {
       try {
+        var payload;
+        try { payload = JSON.parse(val); } catch (e) { payload = val; }
+        var body = JSON.stringify({ store_key: key, payload: payload, updated_at: new Date().toISOString() });
         var x = new XMLHttpRequest();
-        x.open("PUT", API + "/api/stores/" + encodeURIComponent(key), true);
-        x.setRequestHeader("Content-Type", "application/json");
-        x.send(val);
+        x.open("POST", REST, true);
+        cabecalhos(x, true);
+        x.send(body);
       } catch (e) {}
     }
   };
