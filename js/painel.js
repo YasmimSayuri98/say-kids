@@ -2495,13 +2495,59 @@ function mostrarQRAluno(aluno) {
     <div class="qr-popup-pessoa">${esc(aluno.nome)}</div>
     <div class="qr-code-box" id="qr-render"></div>
     <div class="qr-cod-grande">${esc(aluno.qr_code)}</div>
-    <button class="btn-salvar" style="background:var(--azul)" data-fechar-popup>Fechar</button>
+    <div class="repor-botoes">
+      <button class="btn-cancelar" type="button" data-fechar-popup>Fechar</button>
+      <button class="btn-salvar" type="button" id="qr-imprimir" style="background:var(--azul)">${ic("printer", "#fff")} Imprimir tag</button>
+    </div>
   </div>`;
   document.body.appendChild(div);
   desenharQR(div.querySelector("#qr-render"), aluno.qr_code);
+  const btImp = div.querySelector("#qr-imprimir");
+  if (btImp) btImp.addEventListener("click", () => imprimirQRAluno(aluno, div.querySelector("#qr-render")));
   const fechar = () => { if (div.parentNode) div.remove(); };
   div.addEventListener("click", (e) => { if (e.target === div || e.target.closest("[data-fechar-popup]")) fechar(); });
 }
+
+/* Imprime a tag do aluno (nome + QR Code + código) para colocar na mochila */
+function imprimirQRAluno(aluno, render) {
+  // Pega a imagem do QR já gerado (canvas ou img criados pelo qrcodejs)
+  let src = "";
+  if (render) {
+    const canvas = render.querySelector("canvas");
+    const img = render.querySelector("img");
+    if (canvas) { try { src = canvas.toDataURL("image/png"); } catch (e) {} }
+    if (!src && img) src = img.src;
+  }
+  if (!src) { aviso("Não foi possível preparar o QR Code para impressão. Tente abrir o QR novamente."); return; }
+  const w = window.open("", "_blank", "width=430,height=600");
+  if (!w) { aviso("Permita pop-ups para imprimir a tag do QR Code."); return; }
+  w.document.write(
+    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">' +
+    "<title>Tag QR - " + esc(aluno.nome) + "</title><style>" +
+    "body{font-family:Arial,Helvetica,sans-serif;margin:0;padding:28px;text-align:center;color:#12335c}" +
+    ".tag{border:2px dashed #9db6d6;border-radius:18px;padding:24px 28px;display:inline-block}" +
+    ".escola{font-size:13px;letter-spacing:3px;color:#2f7de1;font-weight:bold;margin-bottom:4px}" +
+    ".sub{font-size:10px;letter-spacing:2px;color:#8a97a9;margin-bottom:14px}" +
+    ".nome{font-size:21px;font-weight:800;margin:4px 0 14px}" +
+    "img{width:230px;height:230px;display:block;margin:0 auto}" +
+    ".cod{font-size:13px;color:#555;margin-top:12px;letter-spacing:1px}" +
+    ".noprint{margin-top:18px}.noprint button{padding:11px 22px;font-size:15px;border:none;border-radius:10px;background:#2563eb;color:#fff;font-weight:bold;cursor:pointer}" +
+    "@media print{.noprint{display:none}}" +
+    "</style></head><body>" +
+    '<div class="tag">' +
+    '<div class="escola">SAY KIDS</div>' +
+    '<div class="sub">GESTÃO ESCOLAR</div>' +
+    '<div class="nome">' + esc(aluno.nome) + "</div>" +
+    '<img src="' + src + '" alt="QR Code">' +
+    '<div class="cod">' + esc(aluno.qr_code) + "</div>" +
+    "</div>" +
+    '<div class="noprint"><button onclick="window.print()">Imprimir</button></div>' +
+    "<scr" + "ipt>setTimeout(function(){window.focus();window.print();},350);</scr" + "ipt>" +
+    "</body></html>"
+  );
+  w.document.close();
+}
+
 /* Gera um QR Code REAL e scannável usando a biblioteca QRCode (qrcodejs).
    Se a biblioteca não carregar (offline), cai num padrão visual só de aparência. */
 function desenharQR(el, texto) {
