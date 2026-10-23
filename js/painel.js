@@ -2532,10 +2532,15 @@ function mostrarPopupFreq(tipo, pessoa, hora) {
    confirmar(mensagem, aoConfirmar, opcoes) -> botão Cancelar / Confirmar
    ===================================================================== */
 function aviso(mensagem, tipo) {
-  // Se o tipo não for informado, deduz pela mensagem (sucesso x atenção)
+  // Se o tipo não for informado, deduz pela mensagem.
+  // Primeiro verifica sinais de FALHA/validação (têm prioridade, mesmo que a frase
+  // contenha "salvar"), depois sinais de SUCESSO; o resto vira "alerta".
   if (!tipo) {
-    tipo = /sucesso|cadastrad|atualizad|registrad|salv|enviad|repost|emitid|excluíd|removid|gerad/i.test(mensagem)
-      ? "sucesso" : "alerta";
+    if (/n[ãa]o |inv[áa]lid|indispon[íi]v|obrigat[óo]ri|\berro\b|falh|selecione|informe|digite|preencha|permita|m[áa]ximo|remova/i.test(mensagem))
+      tipo = "alerta";
+    else if (/sucesso|cadastrad|atualizad|registrad|salv|enviad|repost|emitid|exclu[íi]d|removid|gerad/i.test(mensagem))
+      tipo = "sucesso";
+    else tipo = "alerta";
   }
   const estilos = {
     sucesso: { cor: "#22a06b", ico: "check",  titulo: "Tudo certo!" },
@@ -3588,7 +3593,8 @@ page.addEventListener("submit", (e) => {
       aviso(
         "Não foi possível salvar o cardápio.\n\nHá aluno(s) com restrição a alimentos inseridos:\n" +
         conflitos.map((c) => "• " + c.aluno + " — " + c.alimento).join("\n") +
-        "\n\nRemova esses alimentos do cardápio para poder salvar."
+        "\n\nRemova esses alimentos do cardápio para poder salvar.",
+        "erro"
       );
       return; // mantém o formulário com os dados preenchidos
     }
