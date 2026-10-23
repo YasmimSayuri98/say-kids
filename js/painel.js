@@ -2455,14 +2455,22 @@ function porteiroHistorico() {
 /* ----- Câmera + QR + processamento do registro ----- */
 function pararCameraQR() {
   if (qrLoop) { clearInterval(qrLoop); qrLoop = null; }
+  if (qrRAF) { cancelAnimationFrame(qrRAF); qrRAF = null; }
   if (qrStream) { qrStream.getTracks().forEach((t) => t.stop()); qrStream = null; }
 }
 async function iniciarCameraQR() {
   const video = document.getElementById("qr-video");
   const status = document.getElementById("qr-status");
   if (!video) return;
+  // Atributos necessários para o iPhone/Safari exibir e tocar o vídeo inline
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  video.setAttribute("autoplay", "");
+  video.muted = true;
   try {
-    qrStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    qrStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } }, audio: false,
+    });
     video.srcObject = qrStream;
     await video.play();
     status.textContent = "Câmera ativa. Aponte para o QR Code do aluno.";
@@ -2470,8 +2478,8 @@ async function iniciarCameraQR() {
     status.textContent = "Não foi possível abrir a câmera. Use a leitura manual abaixo.";
     return;
   }
-  // Leitura automática: usa o leitor nativo (BarcodeDetector) quando existir;
-  // senão, usa a biblioteca jsQR (funciona em qualquer navegador, inclusive iPhone/Safari).
+
+  // 1) Leitor nativo (Chrome/Edge/Android) quando disponível — rápido
   if ("BarcodeDetector" in window) {
     const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
     qrLoop = setInterval(async () => {
@@ -2479,23 +2487,35 @@ async function iniciarCameraQR() {
         const codes = await detector.detect(video);
         if (codes && codes.length) processarQR(codes[0].rawValue);
       } catch (e) {}
-    }, 500);
-  } else if (window.jsQR) {
+    }, 400);
+    return;
+  }
+
+  // 2) Fallback universal (iPhone/Safari e outros): jsQR lendo os quadros do vídeo
+  if (window.jsQR) {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d", { willReadFrequently: true });
-    qrLoop = setInterval(() => {
-      if (!video.videoWidth) return;
-      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      try {
-        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = window.jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
-        if (code && code.data) processarQR(code.data);
-      } catch (e) {}
-    }, 400);
-  } else {
-    status.textContent = "Leitura automática indisponível neste navegador. Use a leitura manual abaixo.";
+    const tick = () => {
+      if (!qrStream) return; // câmera parada
+      if (video.readyState >= 2 && video.videoWidth) {
+        // Reduz o quadro (máx. ~640px) — bem mais rápido e confiável no celular
+        const escala = Math.min(1, 640 / video.videoWidth);
+        canvas.width = Math.round(video.videoWidth * escala);
+        canvas.height = Math.round(video.videoHeight * escala);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        try {
+          const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = window.jsQR(img.data, img.width, img.height, { inversionAttempts: "attemptBoth" });
+          if (code && code.data) processarQR(code.data);
+        } catch (e) {}
+      }
+      qrRAF = requestAnimationFrame(tick);
+    };
+    qrRAF = requestAnimationFrame(tick);
+    return;
   }
+
+  status.textContent = "Leitura automática indisponível neste navegador. Use a leitura manual abaixo.";
 }
 function processarQR(valor) {
   let pessoa = (valor || "").trim();
@@ -3031,7 +3051,7 @@ let agendaDataSel = ""; // data selecionada na agenda do professor
 let agendaTurmaSel = ""; // turma selecionada na agenda (obrigatória antes de ver os alunos)
 let respAlunoSel = "";   // filho selecionado no app do responsável
 let respMesSel = new Date().toISOString().slice(0, 7); // mês (AAAA-MM) na frequência do responsável
-let qrStream = null, qrLoop = null, qrUltimo = null; // estado da leitura de QR (porteiro)
+let qrStream = null, qrLoop = null, qrRAF = null, qrUltimo = null; // estado da leitura de QR (porteiro)
 let editEstoqueIdx = null; // índice em edição (estoque) ou null para novo
 let retiradaIdx = null; // item selecionado para retirada
 let paginaAtual = ""; // página atualmente aberta
