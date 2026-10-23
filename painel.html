@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Say Kids — Painel do Administrador</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,600;0,700;0,800;0,900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/painel.css" />
 </head>
 <body>
@@ -12,12 +15,24 @@
     <!-- ===== Menu lateral ===== -->
     <aside class="sidebar" id="sidebar">
       <div class="sidebar-brand">
-        <!-- Insira o seu logo em: assets/logo.png -->
-        <img src="assets/logo.png" alt="Logo da escola" class="s-logo-img"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
-        <div class="s-logo-placeholder">
-          <span>Seu logo aqui</span>
-          <small>assets/logo.png</small>
+        <span class="sb-mark">
+          <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="skgSide" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#5a9bff"/><stop offset="1" stop-color="#2f7de1"/>
+              </linearGradient>
+            </defs>
+            <rect x="5" y="5" width="54" height="54" rx="17" fill="url(#skgSide)"/>
+            <path d="M22 40 L19 49 L31 41 Z" fill="#fff"/>
+            <rect x="15" y="18" width="34" height="24" rx="11" fill="#fff"/>
+            <circle cx="27" cy="29" r="2.7" fill="#2f7de1"/>
+            <circle cx="37" cy="29" r="2.7" fill="#2f7de1"/>
+            <path d="M26 34c2.5 2.6 9.5 2.6 12 0" stroke="#f97316" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <div class="sb-word">
+          <div class="sb-name"><span class="sb-say">Say</span> <span class="sb-kids">Kids</span></div>
+          <div class="sb-sub">GESTÃO ESCOLAR</div>
         </div>
       </div>
 
@@ -73,6 +88,7 @@
   </div>
 
   <script src="js/db-bridge.js"></script>
+  <script src="js/regras.js"></script>
   <script src="js/painel.js"></script>
 </body>
 </html>

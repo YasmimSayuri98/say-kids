@@ -131,8 +131,30 @@ if (typeof document !== "undefined" && document.getElementById("form-login")) {
 
   linkEsqueci.addEventListener("click", (ev) => {
     ev.preventDefault();
-    alert("Recuperação de senha\n\nEntre em contato com a coordenação da escola para redefinir sua senha.\n(Função a ser integrada ao servidor.)");
+    popupLogin(
+      "Recuperação de senha",
+      "Entre em contato com a coordenação da escola para redefinir sua senha."
+    );
   });
+}
+
+/* Pop-up padronizado da tela de login (mesmo estilo do sistema) */
+function popupLogin(titulo, mensagem) {
+  const div = document.createElement("div");
+  div.className = "lg-popup-overlay";
+  div.innerHTML =
+    '<div class="lg-popup">' +
+      '<div class="lg-popup-ico">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7h.01"/></svg>' +
+      '</div>' +
+      '<div class="lg-popup-titulo">' + titulo + '</div>' +
+      '<div class="lg-popup-msg">' + mensagem + '</div>' +
+      '<button type="button" class="lg-popup-btn" data-fechar>OK</button>' +
+    '</div>';
+  document.body.appendChild(div);
+  const fechar = () => { if (div.parentNode) div.remove(); };
+  div.addEventListener("click", (e) => { if (e.target === div || e.target.closest("[data-fechar]")) fechar(); });
+  const bt = div.querySelector("[data-fechar]"); if (bt) bt.focus();
 }
 
 /* ===== Exporta a lógica para os testes automatizados (Jest / Node) ===== */

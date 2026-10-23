@@ -30,25 +30,30 @@ body {
   grid-template-columns: 1fr 480px;
   align-items: center;
   gap: 40px;
-  padding: 40px 60px 120px 90px;
+  padding: 40px 60px 150px 90px;
 
-  /* >>> Imagem de fundo <<< */
-  background-image: url("../assets/fundo-login.png");
-  background-size: cover;
-  background-position: center bottom;
-  background-repeat: no-repeat;
-  background-attachment: fixed;
-  background-color: #eaf1fb; /* cor de reserva enquanto a imagem não carrega */
+  /* Fundo limpo em degradê (sem ilustração por trás do texto, para nada sobrepor) */
+  background: linear-gradient(180deg, #eaf4ff 0%, #f4f9ff 42%, #ffffff 78%);
+  background-color: #eaf4ff;
+}
+
+/* Onda azul decorativa no rodapé (mantém a essência da tela antiga) */
+.login-page::after {
+  content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 150px; z-index: 0;
+  pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 150' preserveAspectRatio='none'%3E%3Cpath fill='%233b82f6' fill-opacity='0.45' d='M0,70 C240,20 480,120 720,80 C960,40 1200,110 1440,70 L1440,150 L0,150 Z'/%3E%3Cpath fill='%231f6fd6' d='M0,95 C240,55 520,135 760,100 C1000,65 1220,120 1440,90 L1440,150 L0,150 Z'/%3E%3C/svg%3E") bottom / cover no-repeat;
 }
 
 /* ===== Coluna esquerda: apresentação ===== */
-.login-hero { position: relative; z-index: 2; padding-right: 20px; padding-top: 30px; align-self: start; margin-top: 60px; }
+.login-hero { position: relative; z-index: 2; padding-right: 20px; align-self: center; }
 
-.brand { display: flex; align-items: center; gap: 14px; margin-bottom: 40px; padding-left: 150px; }
-.brand-name { font-size: 38px; font-weight: 800; line-height: 1; letter-spacing: -.5px; }
+.brand { display: flex; align-items: center; gap: 16px; margin-bottom: 36px; }
+.brand-mark { flex-shrink: 0; display: grid; place-items: center; }
+.brand-mark svg { width: 58px; height: 58px; display: block; filter: drop-shadow(0 8px 18px rgba(37,99,235,.30)); }
+.brand-name { font-size: 38px; font-weight: 900; line-height: 1; letter-spacing: -.5px; }
 .brand-name .say { color: var(--azul); }
 .brand-name .kids { color: var(--laranja); }
-.brand-sub { font-size: 12px; letter-spacing: 5px; color: #8a97a9; font-weight: 700; margin-top: 5px; }
+.brand-sub { font-size: 12px; letter-spacing: 5px; color: #8a97a9; font-weight: 800; margin-top: 5px; }
 
 .hero-title { font-size: 46px; font-weight: 800; line-height: 1.18; margin-bottom: 22px; }
 .hero-title .l1, .hero-title .l3, .hero-title .l4 { color: var(--azul); }
@@ -78,8 +83,9 @@ body {
   box-shadow: 0 30px 70px rgba(31, 111, 214, 0.18);
   padding: 40px 44px;
 }
-.card-school-icon { width: 86px; height: 78px; display: block; margin: 0 auto 14px; }
-.card-title { text-align: center; font-size: 34px; font-weight: 800; color: var(--azul-titulo); }
+.card-logo { display: grid; place-items: center; margin: 0 auto 16px; }
+.card-logo svg { width: 76px; height: 76px; display: block; filter: drop-shadow(0 10px 20px rgba(37,99,235,.28)); }
+.card-title { text-align: center; font-size: 34px; font-weight: 900; color: var(--azul-titulo); }
 .card-sub { text-align: center; color: var(--texto-suave); margin: 6px 0 30px; font-size: 16px; }
 
 .field { margin-bottom: 20px; }
@@ -139,9 +145,84 @@ body {
   text-shadow: 0 1px 2px rgba(0,0,0,.15);
 }
 
+/* ===== Pop-up padronizado (login) ===== */
+.lg-popup-overlay {
+  position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+  background: rgba(15,27,48,.55); backdrop-filter: blur(2px); padding: 24px;
+  animation: skFade .15s ease;
+}
+.lg-popup {
+  background: #fff; border-radius: 24px; padding: 34px 36px; text-align: center;
+  max-width: 400px; width: 100%; box-shadow: 0 30px 70px rgba(0,0,0,.3);
+  animation: skPop .22s cubic-bezier(.2,.8,.3,1.2);
+}
+.lg-popup-ico {
+  width: 70px; height: 70px; border-radius: 50%; display: grid; place-items: center;
+  margin: 0 auto 16px; background: var(--azul); box-shadow: 0 8px 20px rgba(47,125,225,.3);
+}
+.lg-popup-ico svg { width: 36px; height: 36px; }
+.lg-popup-titulo { font-size: 22px; font-weight: 800; color: var(--azul-titulo); }
+.lg-popup-msg { font-size: 15.5px; color: #5f7085; line-height: 1.55; margin: 10px 0 24px; }
+.lg-popup-btn {
+  width: 100%; border: none; cursor: pointer; font-family: inherit;
+  background: var(--azul); color: #fff; font-size: 16px; font-weight: 800;
+  padding: 14px; border-radius: 13px; transition: filter .15s;
+}
+.lg-popup-btn:hover { filter: brightness(1.07); }
+@keyframes skFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes skPop { from { transform: translateY(14px) scale(.95); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ===== Movimento / fluidez ===== */
+@keyframes skUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: none; } }
+.login-hero { animation: skUp .6s ease both; }
+.login-card { animation: skUp .6s .12s ease both; transition: box-shadow .3s ease, transform .3s ease; }
+.login-card:hover { box-shadow: 0 38px 85px rgba(31,111,214,.24); transform: translateY(-3px); }
+.feature { animation: skUp .55s ease both; }
+.feature:nth-child(1) { animation-delay: .18s; }
+.feature:nth-child(2) { animation-delay: .28s; }
+.feature:nth-child(3) { animation-delay: .38s; }
+.btn-primary { background: linear-gradient(135deg, #fb8b3c, #f97316); }
+.btn-primary:hover { background: linear-gradient(135deg, #f97316, #ea6a0a); box-shadow: 0 14px 28px rgba(249,115,22,.4); transform: translateY(-2px); }
+.input-wrap input:-webkit-autofill { -webkit-text-fill-color: var(--texto); transition: background-color 9999s; }
+@media (prefers-reduced-motion: reduce) {
+  .login-hero, .login-card, .feature { animation: none; }
+  .login-card:hover, .btn-primary:hover { transform: none; }
+}
+
 /* ===== Responsivo ===== */
+/* Tablet e telas médias: esconde a apresentação, mostra só o card centralizado */
 @media (max-width: 1024px) {
-  .login-page { grid-template-columns: 1fr; padding: 30px 24px 120px; background-attachment: scroll; }
+  .login-page {
+    grid-template-columns: 1fr; gap: 0; padding: 32px 24px 90px;
+    background-attachment: scroll; align-items: start;
+  }
   .login-hero { display: none; }
-  .login-side { min-height: 90vh; }
+  .login-side { min-height: calc(100vh - 110px); padding-top: 8px; }
+}
+
+/* Celular */
+@media (max-width: 560px) {
+  .login-page { padding: 22px 16px 76px; }
+  .login-card { border-radius: 26px; padding: 30px 22px; max-width: 100%; }
+  .card-logo svg { width: 64px; height: 64px; }
+  .card-title { font-size: 28px; }
+  .card-sub { font-size: 14.5px; margin: 6px 0 24px; }
+  .field { margin-bottom: 16px; }
+  .field label { font-size: 14px; }
+  .input-wrap { border-radius: 12px; padding: 0 14px; }
+  .input-wrap input { padding: 14px 0; font-size: 15px; }
+  .form-row { flex-direction: column; align-items: flex-start; gap: 12px; margin-bottom: 22px; }
+  .btn-primary { font-size: 16.5px; padding: 15px; }
+  .card-divider { margin: 22px 0 16px; }
+  .card-mascots svg { width: 46px; height: 46px; }
+  .footer-text {
+    flex-direction: column; align-items: center; gap: 3px; text-align: center;
+    padding: 0 16px; font-size: 12.5px; bottom: 12px;
+  }
+}
+
+/* Telas muito baixas (celular deitado): deixa rolar em vez de espremer */
+@media (max-height: 640px) and (max-width: 1024px) {
+  .login-side { min-height: 0; }
+  .login-page { align-items: start; }
 }

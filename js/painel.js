@@ -57,6 +57,9 @@ const PATHS = {
   alignLeft: '<path d="M4 6h16M4 12h10M4 18h13"/>',
   alignCenter: '<path d="M4 6h16M7 12h10M6 18h12"/>',
   alignRight: '<path d="M4 6h16M10 12h10M7 18h13"/>',
+  alerta: '<path d="M12 3 2 20h20L12 3z"/><path d="M12 10v5M12 18h.01"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7h.01"/>',
+  sign: '<path d="M3 17c3 0 3-6 6-6s3 8 6 8 3-6 6-6"/><path d="M3 21h18"/>',
 };
 function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;"); }
 function ic(nome, cor) {
@@ -75,11 +78,11 @@ const COR = { azul: "#2563eb", verde: "#22a06b", laranja: "#f97316", roxo: "#7c5
 
 // --- Sair (remove só a sessão desta aba) ---
 document.getElementById("btn-sair").addEventListener("click", () => {
-  if (confirm("Deseja sair do sistema?")) {
+  confirmar("Deseja sair do sistema?", () => {
     if (SID) localStorage.removeItem("saykids_sess_" + SID);
     sessionStorage.removeItem("saykids_sessao");
     window.location.href = "index.html";
-  }
+  }, { titulo: "Sair do sistema", confirmar: "Sair" });
 });
 
 // --- Menu mobile ---
@@ -114,18 +117,13 @@ const MAX_TURMAS_AUXILIAR = 2;
    - as turmas selecionadas devem ter períodos diferentes;
    - turma de período Integral só pode ser escolhida sozinha. */
 function validarTurmasPeriodo(nomesTurmas) {
-  const periodos = getTurmas().filter((t) => nomesTurmas.includes(t.nome)).map((t) => (t.periodo || "").trim().toLowerCase());
-  if (periodos.some((p) => p === "integral") && nomesTurmas.length > 1)
-    return "Turma de período Integral não pode ser combinada com outra. Selecione apenas essa turma.";
-  if (periodos.some((p, i) => p && periodos.indexOf(p) !== i))
-    return "As turmas selecionadas têm o mesmo período. Escolha turmas de períodos diferentes.";
-  return null;
+  return Regras.validarTurmasPeriodo(getTurmas().filter((t) => nomesTurmas.includes(t.nome)));
 }
 function checarTurmasLive(selector, alvo, max) {
   const marcadas = [...document.querySelectorAll(selector + ":checked")];
-  if (marcadas.length > max) { alvo.checked = false; alert(`No máximo ${max} turma(s).`); return; }
+  if (marcadas.length > max) { alvo.checked = false; aviso(`No máximo ${max} turma(s).`); return; }
   const msg = validarTurmasPeriodo(marcadas.map((c) => c.value));
-  if (msg) { alvo.checked = false; alert(msg); }
+  if (msg) { alvo.checked = false; aviso(msg); }
 }
 
 /* ===== Armazenamento de turmas (localStorage) ===== */
@@ -262,11 +260,7 @@ function getRecados() { const s = localStorage.getItem("saykids_recados"); try {
 function setRecados(arr) { localStorage.setItem("saykids_recados", JSON.stringify(arr)); }
 function recadosDoAluno(nome) { return getRecados().filter((r) => r.aluno === nome); }
 /* Data do recado em formato ISO (AAAA-MM-DD), a partir do dataISO ou da data BR */
-function recadoISO(r) {
-  if (r.dataISO) return r.dataISO;
-  const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(r.data || "");
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
-}
+function recadoISO(r) { return Regras.recadoISO(r); }
 /* RF-09: cria notificação aos responsáveis do aluno ao registrar entrada/saída */
 function notificarResponsaveis(alunoNome, tipo, hora, data) {
   const aluno = getAlunos().find((a) => a.nome === alunoNome);
@@ -313,31 +307,13 @@ function reporEstoque(i, qtd, entrada, venc) {
 
 /* RF-15: verifica restrições dos alunos da turma contra os alimentos do cardápio */
 function verificarRestricoes(turmaNome, itens) {
-  const alunos = getAlunos().filter((a) => turmaDoAluno(a.nome) === turmaNome);
-  const alimentos = itens.map((i) => (i.alimento || "").toLowerCase()).filter(Boolean);
-  const conflitos = [];
-  alunos.forEach((a) => {
-    restricoesLista(a).forEach((r) => {
-      const alvo = (r.alimento || "").toLowerCase();
-      if (!alvo) return;
-      const bate = alimentos.some((al) => al === alvo || al.includes(alvo) || alvo.includes(al));
-      if (bate) conflitos.push({ aluno: a.nome, alimento: r.alimento, gravidade: r.gravidade || "" });
-    });
-  });
-  return conflitos;
+  const alunos = getAlunos().filter((a) => turmaDoAluno(a.nome) === turmaNome)
+    .map((a) => ({ nome: a.nome, restricoes: restricoesLista(a) }));
+  return Regras.verificarRestricoes(alunos, itens);
 }
 /* RF-14: verifica se há estoque suficiente para os alimentos do cardápio */
 function verificarEstoque(itens) {
-  const need = {};
-  itens.forEach((i) => { const n = i.alimento; if (n) need[n] = (need[n] || 0) + (Number(i.quantidade) || 0); });
-  const estoque = getEstoque();
-  const faltas = [];
-  Object.keys(need).forEach((nome) => {
-    const it = estoque.find((e) => e.nome.toLowerCase() === nome.toLowerCase());
-    const disp = it ? Number(it.quantidade) : 0;
-    if (need[nome] > disp) faltas.push({ alimento: nome, necessario: need[nome], disponivel: disp, falta: need[nome] - disp, unidade: it ? it.unidade : "" });
-  });
-  return faltas;
+  return Regras.verificarEstoque(itens, getEstoque());
 }
 function alimentosEstoqueNomes() { return getEstoque().map((e) => e.nome); }
 /* Texto "limpo" (sem tags/nbsp) para comparar conteúdo de dias */
@@ -499,7 +475,7 @@ function paginaLista(titulo, botao, cabecalhos, linhas) {
     <div class="panel">
       <div class="lista-head">
         <h2>${titulo}</h2>
-        <button class="btn" onclick="alert('Formulário de cadastro — a ser integrado ao servidor.')">+ ${botao}</button>
+        <button class="btn" onclick="aviso('Formulário de cadastro — a ser integrado ao servidor.')">+ ${botao}</button>
       </div>
       ${tabela(cabecalhos, linhas)}
     </div>`;
@@ -1286,10 +1262,8 @@ function formDocumento() {
   const editando = editDocIdx != null;
   const d = editando ? getDocumentos()[editDocIdx] : {};
   docCampos = (d.campos || []).slice();
-  docAssinatura = d.assinatura || "";
-  const assinaturaInner = docAssinatura
-    ? `<img class="assinatura-preview" src="${docAssinatura}" alt="Assinatura">`
-    : `<div class="foto-cam">${ic("edit", COR.azul)}</div><div class="fb-main">Clique para inserir a imagem da assinatura</div><div class="fb-sub">PNG ou JPG</div>`;
+  // A assinatura agora é uma imagem inserida dentro do próprio texto (posicionável
+  // livremente), não mais um bloco fixo no rodapé.
   return `
     <div class="page-head">
       <div class="ph-left">
@@ -1347,22 +1321,20 @@ function formDocumento() {
                 <input type="color" id="doc-cor" class="rt-color" title="Cor do texto" value="#1e293b">
                 <span class="rt-sep"></span>
                 <button type="button" class="rt-btn rt-logo" data-doc-logo title="Inserir logo / imagem">${ic("filePlus", "#3a4a5c")} Logo</button>
-                <button type="button" class="rt-btn" data-logo-size="menor" title="Diminuir o logo (clique na imagem antes)"><b>−</b></button>
-                <button type="button" class="rt-btn" data-logo-size="maior" title="Aumentar o logo (clique na imagem antes)"><b>+</b></button>
+                <button type="button" class="rt-btn rt-logo" data-doc-assinatura title="Inserir imagem de assinatura no ponto do cursor">${ic("sign", "#3a4a5c")} Assinatura</button>
+                <span class="rt-sep"></span>
+                <span class="rt-img-ctrls" title="Clique numa imagem do texto e use estes botões para posicioná-la e redimensioná-la">
+                  <button type="button" class="rt-btn" data-img-align="left" title="Imagem à esquerda">${ic("alignLeft", "#3a4a5c")}</button>
+                  <button type="button" class="rt-btn" data-img-align="center" title="Centralizar imagem">${ic("alignCenter", "#3a4a5c")}</button>
+                  <button type="button" class="rt-btn" data-img-align="right" title="Imagem à direita">${ic("alignRight", "#3a4a5c")}</button>
+                  <button type="button" class="rt-btn" data-logo-size="menor" title="Diminuir a imagem selecionada"><b>−</b></button>
+                  <button type="button" class="rt-btn" data-logo-size="maior" title="Aumentar a imagem selecionada"><b>+</b></button>
+                  <input type="number" id="doc-img-tam" class="rt-num" min="40" max="700" step="10" placeholder="px" title="Largura da imagem selecionada (em pixels)">
+                </span>
               </div>
               <div id="f-texto" class="doc-editor" contenteditable="true">${d.texto || ""}</div>
               <input type="file" id="doc-logo-input" accept="image/png,image/jpeg" hidden>
-            </div>
-          </div>
-
-          <div class="bloco-titulo" style="margin-top:26px">Assinatura automática do responsável</div>
-          <div class="linha">
-            <div class="campo">
-              <label>Imagem da assinatura <span class="hint-max">(será aplicada automaticamente no documento)</span></label>
-              <div class="assinatura-box" id="assinatura-box" data-assinatura-trigger>
-                <div id="assinatura-conteudo">${assinaturaInner}</div>
-              </div>
-              <input type="file" id="assinatura-input" accept="image/png,image/jpeg" hidden />
+              <input type="file" id="doc-assinatura-input" accept="image/png,image/jpeg" hidden>
             </div>
           </div>
 
@@ -1396,7 +1368,7 @@ function documentosEmitir() {
     <div class="page-head">
       <div class="ph-left">
         <button class="back-btn" data-goto="documentos" title="Voltar">${ic("arrowLeft", COR.azul)}</button>
-        <div><div class="ph-title">Emitir Documento</div><div class="ph-sub">Selecione o documento e o aluno para emitir.</div></div>
+        <div><div class="ph-title">Emitir Documento</div><div class="ph-sub">Selecione o documento, a turma e o aluno para emitir.</div></div>
       </div>
     </div>
     <form id="form-emitir">
@@ -1405,7 +1377,17 @@ function documentosEmitir() {
           <div class="bloco-titulo">Emissão de documento</div>
           <div class="linha c2">
             ${campoSelect("Documento", true, "doc", "f-documento", documentosNomes(), "")}
-            ${campoSelect("Aluno", true, "userline", "f-aluno", alunosNomes(), "")}
+            ${campoSelect("Turma", true, "cap", "f-turma-emitir", getTurmas().map((t) => t.nome), "")}
+          </div>
+          <div class="linha">
+            <div class="campo">
+              <label for="f-aluno">Aluno<span class="obrig">*</span></label>
+              <div class="inp">${ic("userline", "#9aa7b8")}
+                <select id="f-aluno" name="f-aluno" required disabled>
+                  <option value="" disabled selected>Selecione a turma primeiro</option>
+                </select>
+              </div>
+            </div>
           </div>
           <div id="campos-manuais"></div>
           <div class="form-actions">
@@ -1423,9 +1405,6 @@ function documentoGerado() {
   const em = getEmissoes()[viewEmissaoIdx];
   if (!em) return documentosEmitir();
   const corpo = em.texto || "";
-  const assinatura = em.assinatura
-    ? `<div class="folha-assinatura"><img src="${em.assinatura}" alt="Assinatura"><div class="folha-linha">Assinatura do responsável</div></div>`
-    : "";
   return `
     <div class="page-head no-print">
       <div class="ph-left">
@@ -1438,7 +1417,6 @@ function documentoGerado() {
       <div class="folha-cabecalho">Say Kids — Gestão Escolar</div>
       <div class="folha-titulo">${em.documento}</div>
       <div class="folha-texto">${corpo || "<em>Este documento não possui texto configurado.</em>"}</div>
-      ${assinatura}
     </div>`;
 }
 
@@ -1538,7 +1516,7 @@ function imprimirListaCompra(faltas, titulo) {
     <table><thead><tr><th>Alimento</th><th>Quantidade a comprar</th></tr></thead><tbody>${linhas}</tbody></table>
     <script>window.onload=function(){window.print();}</script></body></html>`;
   const w = window.open("", "_blank");
-  if (!w) { alert("Permita pop-ups para abrir a lista de compras para impressão."); return; }
+  if (!w) { aviso("Permita pop-ups para abrir a lista de compras para impressão."); return; }
   w.document.open(); w.document.write(html); w.document.close();
 }
 function cardapioItemRow(it) {
@@ -1799,18 +1777,44 @@ function auxiliarAgenda() { return telaAgenda(true, "Agenda da Turma", "Preencha
 
 /* Recados recebidos dos responsáveis (professor/auxiliar — somente leitura) */
 function recadosProfAux() {
-  const alunosTurma = alunosDasTurmas(turmasDoUsuario());
-  const recados = getRecados().filter((r) => alunosTurma.includes(r.aluno));
+  const turmas = turmasDoUsuario();
+  // alunos conforme o filtro de turma (Todas = todas as turmas do usuário)
+  const alunosFiltro = recFiltroTurma === "Todas"
+    ? alunosDasTurmas(turmas)
+    : alunosDasTurmas([recFiltroTurma]);
+  const recados = getRecados().filter((r) =>
+    alunosFiltro.includes(r.aluno) &&
+    (!recFiltroData || recadoISO(r) === recFiltroData)
+  );
+  // descobre a turma de um aluno (dentre as turmas do usuário) para exibir a etiqueta
+  const turmaDoAluno = (nome) => {
+    const t = getTurmas().find((x) => turmas.includes(x.nome) && (x.alunos || []).includes(nome));
+    return t ? t.nome : "";
+  };
+  const opTurma = [`<option value="Todas">Todas as turmas</option>`]
+    .concat(turmas.map((t) => `<option ${t === recFiltroTurma ? "selected" : ""}>${esc(t)}</option>`)).join("");
+  const temFiltro = recFiltroTurma !== "Todas" || recFiltroData;
   const corpo = recados.length
-    ? recados.map((r) => `
+    ? recados.map((r) => {
+        const tn = turmaDoAluno(r.aluno);
+        return `
         <div class="resp-dia-card">
-          <div class="resp-dia-data">${esc(r.aluno)} <span class="ag-recado-data">· ${esc(r.data || "")} ${esc(r.hora || "")}</span></div>
+          <div class="resp-dia-data">${esc(r.aluno)}${tn ? ` <span class="rec-turma-tag">${esc(tn)}</span>` : ""} <span class="ag-recado-data">· ${esc(r.data || "")} ${esc(r.hora || "")}</span></div>
           <div class="ag-view">${esc(r.texto)}</div>
-        </div>`).join("")
-    : `<div class="empty"><div class="big">${ic("doc", "#9aa7b8")}</div><h2>Nenhum recado recebido</h2><p style="margin-top:8px">Os recados enviados pelos responsáveis dos seus alunos aparecem aqui.</p></div>`;
+        </div>`;
+      }).join("")
+    : `<div class="empty"><div class="big">${ic("doc", "#9aa7b8")}</div><h2>Nenhum recado ${temFiltro ? "para o filtro" : "recebido"}</h2><p style="margin-top:8px">Os recados enviados pelos responsáveis dos seus alunos aparecem aqui.</p></div>`;
   return `
     <div class="page-head"><div class="ph-left"><div><div class="ph-title">Recados</div><div class="ph-sub">Recados enviados pelos responsáveis (somente leitura)</div></div></div></div>
-    <div class="panel">${corpo}</div>`;
+    <div class="panel">
+      <div class="filtro-bar">
+        <span class="filtro-label">${ic("filter", "#7a8aa0")} Filtrar por</span>
+        <div class="inp filtro-inp"><select id="rec-filtro-turma">${opTurma}</select></div>
+        <div class="inp filtro-inp"><input type="date" id="rec-filtro-data" value="${recFiltroData}"></div>
+        ${temFiltro ? `<button type="button" class="btn-mini-azul" data-rec-limpar>${ic("x", COR.azul)} Limpar filtros</button>` : ""}
+      </div>
+      ${corpo}
+    </div>`;
 }
 
 /* ----- Turmas do usuário (professor / auxiliar) ----- */
@@ -2458,17 +2462,17 @@ function mostrarReporModal(i) {
     const qtd = Number(div.querySelector("#rep-qtd").value);
     const entrada = div.querySelector("#rep-entrada").value;
     const venc = div.querySelector("#rep-venc").value;
-    if (!(qtd > 0)) { alert("Informe a quantidade a repor."); return; }
-    if (!entrada) { alert("Informe a data de entrada."); return; }
+    if (!(qtd > 0)) { aviso("Informe a quantidade a repor."); return; }
+    if (!entrada) { aviso("Informe a data de entrada."); return; }
     reporEstoque(i, qtd, entrada, venc);
     fechar();
-    alert("Estoque reposto com sucesso!");
+    aviso("Estoque reposto com sucesso!");
     abrir("listaCompra");
   });
 }
 function mostrarQRAluno(aluno) {
   if (!aluno) return;
-  if (!aluno.qr_code) { alert("Este aluno ainda não tem QR Code. Edite e salve o cadastro para gerar."); return; }
+  if (!aluno.qr_code) { aviso("Este aluno ainda não tem QR Code. Edite e salve o cadastro para gerar."); return; }
   const div = document.createElement("div");
   div.className = "qr-popup-overlay";
   div.innerHTML = `<div class="qr-popup">
@@ -2520,6 +2524,60 @@ function mostrarPopupFreq(tipo, pessoa, hora) {
   const fechar = () => { if (div.parentNode) div.remove(); };
   div.addEventListener("click", (e) => { if (e.target === div || e.target.closest("[data-fechar-popup]")) fechar(); });
   setTimeout(fechar, 4500);
+}
+
+/* =====================================================================
+   POP-UP PADRÃO DO SISTEMA (substitui o alert/confirm do navegador)
+   aviso(mensagem, tipo)  -> "sucesso" | "erro" | "alerta" | "info"
+   confirmar(mensagem, aoConfirmar, opcoes) -> botão Cancelar / Confirmar
+   ===================================================================== */
+function aviso(mensagem, tipo) {
+  // Se o tipo não for informado, deduz pela mensagem (sucesso x atenção)
+  if (!tipo) {
+    tipo = /sucesso|cadastrad|atualizad|registrad|salv|enviad|repost|emitid|excluíd|removid|gerad/i.test(mensagem)
+      ? "sucesso" : "alerta";
+  }
+  const estilos = {
+    sucesso: { cor: "#22a06b", ico: "check",  titulo: "Tudo certo!" },
+    erro:    { cor: "#e2536e", ico: "x",      titulo: "Atenção" },
+    alerta:  { cor: "#f97316", ico: "alerta", titulo: "Atenção" },
+    info:    { cor: "#2563eb", ico: "info",   titulo: "Aviso" },
+  };
+  const s = estilos[tipo] || estilos.info;
+  const div = document.createElement("div");
+  div.className = "qr-popup-overlay";
+  div.innerHTML = `<div class="qr-popup aviso-popup">
+    <div class="qr-popup-ico" style="background:${s.cor}">${ic(s.ico, "#fff")}</div>
+    <div class="qr-popup-tipo" style="color:${s.cor}">${s.titulo}</div>
+    <div class="aviso-msg">${esc(mensagem).replace(/\n/g, "<br>")}</div>
+    <button class="btn-salvar" style="background:${s.cor}" data-fechar-popup>OK</button>
+  </div>`;
+  document.body.appendChild(div);
+  const fechar = () => { if (div.parentNode) div.remove(); };
+  div.addEventListener("click", (e) => { if (e.target === div || e.target.closest("[data-fechar-popup]")) fechar(); });
+  // foco no botão para permitir confirmar com Enter/Esc
+  const bt = div.querySelector("[data-fechar-popup]"); if (bt) bt.focus();
+}
+
+function confirmar(mensagem, aoConfirmar, opcoes) {
+  opcoes = opcoes || {};
+  const perigo = opcoes.perigo !== false; // por padrão é uma ação de risco (excluir/sair)
+  const cor = perigo ? "#e2536e" : "#2563eb";
+  const div = document.createElement("div");
+  div.className = "qr-popup-overlay";
+  div.innerHTML = `<div class="qr-popup aviso-popup">
+    <div class="qr-popup-ico" style="background:${cor}">${ic(perigo ? "alerta" : "info", "#fff")}</div>
+    <div class="qr-popup-tipo" style="color:${cor}">${opcoes.titulo || "Confirmação"}</div>
+    <div class="aviso-msg">${esc(mensagem).replace(/\n/g, "<br>")}</div>
+    <div class="repor-botoes">
+      <button class="btn-cancelar" type="button" data-fechar-popup>${opcoes.cancelar || "Cancelar"}</button>
+      <button class="btn-salvar" type="button" id="conf-sim" style="background:${cor}">${opcoes.confirmar || "Confirmar"}</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  const fechar = () => { if (div.parentNode) div.remove(); };
+  div.addEventListener("click", (e) => { if (e.target === div || e.target.closest("[data-fechar-popup]")) fechar(); });
+  div.querySelector("#conf-sim").addEventListener("click", () => { fechar(); if (aoConfirmar) aoConfirmar(); });
 }
 
 /* ----- Auxiliar: PÁGINA INICIAL (2 opções) ----- */
@@ -2821,7 +2879,6 @@ let alunoResponsaveis = []; // responsáveis associados durante o cadastro/ediç
 let editRespIdx = null; // índice em edição (responsável) ou null para novo
 let editDocIdx = null; // índice em edição (documento) ou null para novo
 let docCampos = []; // campos automáticos do documento em edição
-let docAssinatura = ""; // imagem (dataURL) da assinatura do documento em edição
 let viewEmissaoIdx = null; // emissão sendo visualizada/impressa
 let editCardapioIdx = null; // índice em edição (cardápio) ou null para novo
 let cardapioDias = {}; // conteúdo por dia (ISO → HTML) no cardápio em edição
@@ -2835,6 +2892,7 @@ let editEstoqueIdx = null; // índice em edição (estoque) ou null para novo
 let retiradaIdx = null; // item selecionado para retirada
 let paginaAtual = ""; // página atualmente aberta
 let viewCardapioIdx = null; // cardápio selecionado na visualização
+let recFiltroTurma = "Todas", recFiltroData = ""; // filtros da página de recados (professor/auxiliar)
 let viewCardapioTurma = "Todas"; // filtro de turma no cardápio mensal (almoxarife)
 let viewCardapioMes = "Todos";   // filtro de mês no cardápio mensal (almoxarife)
 let docImgSel = null; // imagem (logo) selecionada no editor de documento
@@ -2944,9 +3002,9 @@ page.addEventListener("click", (e) => {
     if (cfg) {
       const [get, set, rot] = cfg;
       const lista = get();
-      if (lista[i] && confirm(`Excluir o usuário "${lista[i].nome}" (${rot})?`)) {
+      if (lista[i]) confirmar(`Excluir o usuário "${lista[i].nome}" (${rot})?`, () => {
         lista.splice(i, 1); set(lista); abrir("gerenciarUsuarios");
-      }
+      }, { titulo: "Excluir usuário", confirmar: "Excluir" });
     }
     return;
   }
@@ -2954,6 +3012,9 @@ page.addEventListener("click", (e) => {
   // Professor: listar alunos de uma turma
   const listarTurma = e.target.closest("[data-listar-turma]");
   if (listarTurma) { turmaAlunosSel = listarTurma.dataset.listarTurma; abrir("professorAlunos"); return; }
+
+  // Recados (professor/auxiliar): limpar filtros
+  if (e.target.closest("[data-rec-limpar]")) { recFiltroTurma = "Todas"; recFiltroData = ""; abrir("recados"); return; }
 
   // Associar responsável ao aluno (busca)
   const addResp = e.target.closest("[data-add-resp]");
@@ -2992,7 +3053,7 @@ page.addEventListener("click", (e) => {
   if (addAluno) {
     const cap = Number(document.getElementById("f-capacidade").value) || 0;
     if (cap > 0 && turmaAlunos.length >= cap) {
-      alert(`Capacidade máxima da turma atingida (${cap} alunos).`);
+      aviso(`Capacidade máxima da turma atingida (${cap} alunos).`);
       return;
     }
     const nome = addAluno.dataset.addAluno;
@@ -3013,77 +3074,29 @@ page.addEventListener("click", (e) => {
   const del = e.target.closest("[data-del]");
   if (del) {
     const i = Number(del.dataset.del);
-    if (del.dataset.store === "col") {
-      const lista = getColaboradores();
-      if (confirm(`Excluir o colaborador "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setColaboradores(lista); abrir("colaboradores");
-      }
-    } else if (del.dataset.store === "prof") {
-      const lista = getProfessores();
-      if (confirm(`Excluir o professor "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setProfessores(lista); abrir("professores");
-      }
-    } else if (del.dataset.store === "turma") {
-      const lista = getTurmas();
-      if (confirm(`Excluir a turma "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setTurmas(lista); abrir("turmas");
-      }
-    } else if (del.dataset.store === "mov") {
-      const lista = getMovimentacoes();
-      if (confirm("Excluir esta movimentação do histórico?")) {
-        lista.splice(i, 1); setMovimentacoes(lista); abrir("historico");
-      }
-    } else if (del.dataset.store === "aluno") {
-      const lista = getAlunos();
-      if (confirm(`Excluir o aluno "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setAlunos(lista); abrir("alunos");
-      }
-    } else if (del.dataset.store === "resp") {
-      const lista = getResponsaveis();
-      if (confirm(`Excluir o responsável "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setResponsaveis(lista); abrir("responsaveis");
-      }
-    } else if (del.dataset.store === "doc") {
-      const lista = getDocumentos();
-      if (confirm(`Excluir o documento "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setDocumentos(lista); abrir("documentosCadastrar");
-      }
-    } else if (del.dataset.store === "emissao") {
-      const lista = getEmissoes();
-      if (confirm("Excluir este documento emitido do histórico?")) {
-        lista.splice(i, 1); setEmissoes(lista); abrir("documentosEmitir");
-      }
-    } else if (del.dataset.store === "cardapio") {
-      const lista = getCardapios();
-      if (confirm(`Excluir o cardápio de ${lista[i].mes}/${lista[i].ano}?`)) {
-        lista.splice(i, 1); setCardapios(lista); abrir("cardapio");
-      }
-    } else if (del.dataset.store === "freq") {
-      const lista = getFrequencia();
-      if (confirm("Excluir este registro de frequência?")) {
-        lista.splice(i, 1); setFrequencia(lista); abrir("porteiroHistorico");
-      }
-    } else if (del.dataset.store === "estoque") {
-      const lista = getEstoque();
-      if (confirm(`Excluir o item "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setEstoque(lista); abrir("estoque");
-      }
-    } else if (del.dataset.store === "retirada") {
-      const lista = getRetiradas();
-      if (confirm("Excluir este registro de retirada?")) {
-        lista.splice(i, 1); setRetiradas(lista); abrir("retiradasHistorico");
-      }
-    } else if (del.dataset.store === "listacompra") {
-      const lista = getListaCompra();
-      if (confirm("Remover este item da lista de compra?")) {
-        lista.splice(i, 1); setListaCompra(lista); abrir("listaCompra");
-      }
-    } else {
-      const lista = getSecretarias();
-      if (confirm(`Excluir a secretaria "${lista[i].nome}"?`)) {
-        lista.splice(i, 1); setSecretarias(lista); abrir("secretaria");
-      }
-    }
+    // Mapa: store -> [getLista, setLista, páginaDeVolta, função que monta a mensagem]
+    const mapaDel = {
+      col:        [getColaboradores, setColaboradores, "colaboradores",       (x) => `Excluir o colaborador "${x.nome}"?`],
+      prof:       [getProfessores,   setProfessores,   "professores",         (x) => `Excluir o professor "${x.nome}"?`],
+      turma:      [getTurmas,        setTurmas,        "turmas",              (x) => `Excluir a turma "${x.nome}"?`],
+      mov:        [getMovimentacoes, setMovimentacoes, "historico",           ()  => "Excluir esta movimentação do histórico?"],
+      aluno:      [getAlunos,        setAlunos,        "alunos",              (x) => `Excluir o aluno "${x.nome}"?`],
+      resp:       [getResponsaveis,  setResponsaveis,  "responsaveis",        (x) => `Excluir o responsável "${x.nome}"?`],
+      doc:        [getDocumentos,    setDocumentos,    "documentosCadastrar", (x) => `Excluir o documento "${x.nome}"?`],
+      emissao:    [getEmissoes,      setEmissoes,      "documentosEmitir",    ()  => "Excluir este documento emitido do histórico?"],
+      cardapio:   [getCardapios,     setCardapios,     "cardapio",            (x) => `Excluir o cardápio de ${x.mes}/${x.ano}?`],
+      freq:       [getFrequencia,    setFrequencia,    "porteiroHistorico",   ()  => "Excluir este registro de frequência?"],
+      estoque:    [getEstoque,       setEstoque,       "estoque",             (x) => `Excluir o item "${x.nome}"?`],
+      retirada:   [getRetiradas,     setRetiradas,     "retiradasHistorico",  ()  => "Excluir este registro de retirada?"],
+      listacompra:[getListaCompra,   setListaCompra,   "listaCompra",         ()  => "Remover este item da lista de compra?"],
+    };
+    const cfgDel = mapaDel[del.dataset.store]
+      || [getSecretarias, setSecretarias, "secretaria", (x) => `Excluir a secretaria "${x.nome}"?`];
+    const [getL, setL, pagina, msgFn] = cfgDel;
+    const lista = getL();
+    if (lista[i]) confirmar(msgFn(lista[i]), () => {
+      lista.splice(i, 1); setL(lista); abrir(pagina);
+    }, { titulo: "Confirmar exclusão", confirmar: "Excluir" });
     return;
   }
 
@@ -3100,8 +3113,6 @@ page.addEventListener("click", (e) => {
     if (inp && inp.value.trim()) { inserirNoTexto(inp.value.trim()); inp.value = ""; }
     return;
   }
-  const assTrigger = e.target.closest("[data-assinatura-trigger]");
-  if (assTrigger) { document.getElementById("assinatura-input").click(); return; }
 
   // Ver/imprimir documento emitido
   const verEmissao = e.target.closest("[data-ver-emissao]");
@@ -3109,7 +3120,7 @@ page.addEventListener("click", (e) => {
 
   // Professor: salvar agenda
   const salvarAg = e.target.closest("[data-salvar-agenda]");
-  if (salvarAg) { salvarAgendaAtual(); alert("Agenda salva com sucesso!"); return; }
+  if (salvarAg) { salvarAgendaAtual(); aviso("Agenda salva com sucesso!"); return; }
 
   // Aluno: ver QR Code
   const qrAluno = e.target.closest("[data-qr-aluno]");
@@ -3128,7 +3139,7 @@ page.addEventListener("click", (e) => {
   if (qrManual) {
     const sel = document.getElementById("qr-manual-sel");
     if (sel && sel.value) { processarQR(sel.value); sel.selectedIndex = 0; }
-    else alert("Selecione um aluno para registrar.");
+    else aviso("Selecione um aluno para registrar.");
     return;
   }
   // Professor: adicionar/remover refeição e sono
@@ -3141,6 +3152,23 @@ page.addEventListener("click", (e) => {
 
   // Documento: inserir logo / imagem no texto
   if (e.target.closest("[data-doc-logo]")) { const inp = document.getElementById("doc-logo-input"); if (inp) inp.click(); return; }
+  // Documento: inserir imagem de assinatura no ponto do cursor
+  if (e.target.closest("[data-doc-assinatura]")) { const inp = document.getElementById("doc-assinatura-input"); if (inp) inp.click(); return; }
+  // Documento: alinhar a imagem selecionada (esquerda / centro / direita)
+  const imgAlign = e.target.closest("[data-img-align]");
+  if (imgAlign) {
+    const imgs = document.querySelectorAll("#f-texto img");
+    const img = docImgSel || imgs[imgs.length - 1];
+    if (!img) { aviso("Clique primeiro na imagem (logo ou assinatura) que você quer posicionar."); return; }
+    const al = imgAlign.dataset.imgAlign;
+    img.style.display = "block";
+    img.style.marginTop = "8px"; img.style.marginBottom = "8px";
+    if (al === "center") { img.style.marginLeft = "auto"; img.style.marginRight = "auto"; }
+    else if (al === "right") { img.style.marginLeft = "auto"; img.style.marginRight = "0"; }
+    else { img.style.marginLeft = "0"; img.style.marginRight = "auto"; }
+    docImgSel = img;
+    return;
+  }
   // App do responsável: alterar foto / enviar recado
   if (e.target.closest("[data-resp-foto]")) { const inp = document.getElementById("resp-foto-input"); if (inp) inp.click(); return; }
   if (e.target.closest("#resp-recado-enviar")) {
@@ -3153,9 +3181,9 @@ page.addEventListener("click", (e) => {
       setRecados(recados);
       notificar("professor", `Novo recado do responsável de ${aluno.nome}.`);
       notificar("auxiliar", `Novo recado do responsável de ${aluno.nome}.`);
-      alert("Recado enviado!");
+      aviso("Recado enviado!");
       abrir("respRecados");
-    } else { alert("Digite um recado antes de enviar."); }
+    } else { aviso("Digite um recado antes de enviar."); }
     return;
   }
   // Documento: selecionar imagem (para redimensionar)
@@ -3165,7 +3193,7 @@ page.addEventListener("click", (e) => {
   if (logoSz) {
     const imgs = document.querySelectorAll("#f-texto img");
     const img = docImgSel || imgs[imgs.length - 1];
-    if (!img) { alert("Insira um logo primeiro (ou clique na imagem) para ajustar o tamanho."); return; }
+    if (!img) { aviso("Insira um logo primeiro (ou clique na imagem) para ajustar o tamanho."); return; }
     const atual = parseInt(img.style.maxWidth) || img.clientWidth || 180;
     const novo = Math.round(logoSz.dataset.logoSize === "maior" ? Math.min(atual * 1.25, 600) : Math.max(atual * 0.8, 50));
     img.style.maxWidth = novo + "px"; img.style.width = novo + "px";
@@ -3244,7 +3272,7 @@ page.addEventListener("change", (e) => {
   if (e.target.id === "foto-input") {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("A imagem deve ter até 2MB."); e.target.value = ""; return; }
+    if (file.size > 2 * 1024 * 1024) { aviso("A imagem deve ter até 2MB."); e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
       fotoDataUrl = reader.result;
@@ -3255,18 +3283,32 @@ page.addEventListener("change", (e) => {
     return;
   }
 
-  // Assinatura do documento
-  if (e.target.id === "assinatura-input") {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("A imagem deve ter até 2MB."); e.target.value = ""; return; }
+  // Documento: inserir imagem da ASSINATURA no ponto do cursor (posicionável)
+  if (e.target.id === "doc-assinatura-input") {
+    const file = e.target.files[0]; if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { aviso("A imagem deve ter até 2MB."); e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
-      docAssinatura = reader.result;
-      const box = document.getElementById("assinatura-conteudo");
-      if (box) box.innerHTML = `<img class="assinatura-preview" src="${docAssinatura}" alt="Assinatura">`;
+      const ed = document.getElementById("f-texto");
+      if (ed) {
+        ed.focus();
+        if (rtEditor === ed && rtRange) { const s = window.getSelection(); s.removeAllRanges(); s.addRange(rtRange); }
+        document.execCommand("insertHTML", false, `<img src="${reader.result}" alt="Assinatura" style="max-width:220px;width:220px;height:auto;display:block;margin:8px 0">`);
+        const imgs = document.querySelectorAll("#f-texto img"); docImgSel = imgs[imgs.length - 1] || null;
+      }
     };
     reader.readAsDataURL(file);
+    e.target.value = "";
+    return;
+  }
+  // Documento: definir a largura exata (px) da imagem selecionada
+  if (e.target.id === "doc-img-tam") {
+    const imgs = document.querySelectorAll("#f-texto img");
+    const img = docImgSel || imgs[imgs.length - 1];
+    if (!img) { aviso("Clique primeiro na imagem que você quer redimensionar."); e.target.value = ""; return; }
+    const px = Math.max(40, Math.min(Number(e.target.value) || 0, 700));
+    img.style.maxWidth = px + "px"; img.style.width = px + "px"; img.style.height = "auto";
+    docImgSel = img;
     return;
   }
 
@@ -3279,7 +3321,7 @@ page.addEventListener("change", (e) => {
   if (e.target.id === "doc-cor") { formatar("foreColor", e.target.value); return; }
   if (e.target.id === "doc-logo-input") {
     const file = e.target.files[0]; if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("A imagem deve ter até 2MB."); e.target.value = ""; return; }
+    if (file.size > 2 * 1024 * 1024) { aviso("A imagem deve ter até 2MB."); e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
       const ed = document.getElementById("f-texto");
@@ -3314,6 +3356,8 @@ page.addEventListener("change", (e) => {
     return;
   }
   // Almoxarife: filtros do cardápio mensal (turma e mês)
+  if (e.target.id === "rec-filtro-turma") { recFiltroTurma = e.target.value; abrir("recados"); return; }
+  if (e.target.id === "rec-filtro-data") { recFiltroData = e.target.value; abrir("recados"); return; }
   if (e.target.id === "cardapio-view-turma") { viewCardapioTurma = e.target.value; abrir("cardapioView"); return; }
   if (e.target.id === "cardapio-view-mes") { viewCardapioMes = e.target.value; abrir("cardapioView"); return; }
   // Troca de turma da agenda (filtro obrigatório antes de ver os alunos)
@@ -3342,7 +3386,7 @@ page.addEventListener("change", (e) => {
   }
   if (e.target.id === "resp-foto-input") {
     const file = e.target.files[0]; if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { alert("A imagem deve ter até 2MB."); e.target.value = ""; return; }
+    if (file.size > 2 * 1024 * 1024) { aviso("A imagem deve ter até 2MB."); e.target.value = ""; return; }
     const reader = new FileReader();
     reader.onload = () => {
       const alunos = getAlunos();
@@ -3350,6 +3394,19 @@ page.addEventListener("change", (e) => {
       if (i >= 0) { alunos[i].foto = reader.result; setAlunos(alunos); abrir("respDados"); }
     };
     reader.readAsDataURL(file);
+    return;
+  }
+
+  // Emitir: turma escolhida → preenche o filtro de alunos com os alunos daquela turma
+  if (e.target.id === "f-turma-emitir") {
+    const turma = getTurmas().find((t) => t.nome === e.target.value);
+    const nomes = turma ? (turma.alunos || []) : [];
+    const sel = document.getElementById("f-aluno");
+    if (sel) {
+      sel.disabled = nomes.length === 0;
+      sel.innerHTML = `<option value="" disabled selected>${nomes.length ? "Selecione o aluno" : "Nenhum aluno nesta turma"}</option>` +
+        nomes.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+    }
     return;
   }
 
@@ -3401,8 +3458,8 @@ page.addEventListener("submit", (e) => {
       foto: fotoDataUrl,
     };
     const lista = getSecretarias();
-    if (editSecIdx != null) { lista[editSecIdx] = reg; alert("Secretaria atualizada com sucesso!"); }
-    else { lista.push(reg); alert("Secretaria cadastrada com sucesso!"); }
+    if (editSecIdx != null) { lista[editSecIdx] = reg; aviso("Secretaria atualizada com sucesso!"); }
+    else { lista.push(reg); aviso("Secretaria cadastrada com sucesso!"); }
     setSecretarias(lista);
     editSecIdx = null;
     { const dest = voltar("secretaria"); voltarGU = false; abrir(dest); }
@@ -3414,10 +3471,10 @@ page.addEventListener("submit", (e) => {
     const funcao = val("f-funcao");
     const turmas = [...document.querySelectorAll('input[name="turma"]:checked')].map((c) => c.value);
     if (funcao === "Auxiliar") {
-      if (turmas.length === 0) { alert("Selecione ao menos 1 turma para o auxiliar."); return; }
-      if (turmas.length > MAX_TURMAS_AUXILIAR) { alert(`Um auxiliar pode ter no máximo ${MAX_TURMAS_AUXILIAR} turmas.`); return; }
+      if (turmas.length === 0) { aviso("Selecione ao menos 1 turma para o auxiliar."); return; }
+      if (turmas.length > MAX_TURMAS_AUXILIAR) { aviso(`Um auxiliar pode ter no máximo ${MAX_TURMAS_AUXILIAR} turmas.`); return; }
       const erroAux = validarTurmasPeriodo(turmas);
-      if (erroAux) { alert(erroAux); return; }
+      if (erroAux) { aviso(erroAux); return; }
     }
     const reg = {
       nome: val("f-nome"), cpf: val("f-cpf"), email: val("f-email"),
@@ -3426,8 +3483,8 @@ page.addEventListener("submit", (e) => {
       funcao, turmas: funcao === "Auxiliar" ? turmas : [], foto: fotoDataUrl,
     };
     const lista = getColaboradores();
-    if (editColIdx != null) { lista[editColIdx] = reg; alert("Colaborador atualizado com sucesso!"); }
-    else { lista.push(reg); alert("Colaborador cadastrado com sucesso!"); }
+    if (editColIdx != null) { lista[editColIdx] = reg; aviso("Colaborador atualizado com sucesso!"); }
+    else { lista.push(reg); aviso("Colaborador cadastrado com sucesso!"); }
     setColaboradores(lista);
     editColIdx = null;
     { const dest = voltar("colaboradores"); voltarGU = false; abrir(dest); }
@@ -3438,12 +3495,12 @@ page.addEventListener("submit", (e) => {
     e.preventDefault();
     const turmas = [...document.querySelectorAll('input[name="turma-prof"]:checked')].map((c) => c.value);
     if (turmas.length === 0) {
-      alert("Selecione ao menos 1 turma para o professor.");
+      aviso("Selecione ao menos 1 turma para o professor.");
       return;
     }
-    if (turmas.length > 2) { alert("Um professor pode ter no máximo 2 turmas."); return; }
+    if (turmas.length > 2) { aviso("Um professor pode ter no máximo 2 turmas."); return; }
     const erroPeriodo = validarTurmasPeriodo(turmas);
-    if (erroPeriodo) { alert(erroPeriodo); return; }
+    if (erroPeriodo) { aviso(erroPeriodo); return; }
     const reg = {
       nome: val("f-nome"), cpf: val("f-cpf"), email: val("f-email"),
       telefone: val("f-telefone"), cep: val("f-cep"), rua: val("f-rua"),
@@ -3451,8 +3508,8 @@ page.addEventListener("submit", (e) => {
       turmas, foto: fotoDataUrl,
     };
     const lista = getProfessores();
-    if (editProfIdx != null) { lista[editProfIdx] = reg; alert("Professor atualizado com sucesso!"); }
-    else { lista.push(reg); alert("Professor cadastrado com sucesso!"); }
+    if (editProfIdx != null) { lista[editProfIdx] = reg; aviso("Professor atualizado com sucesso!"); }
+    else { lista.push(reg); aviso("Professor cadastrado com sucesso!"); }
     setProfessores(lista);
     editProfIdx = null;
     { const dest = voltar("professores"); voltarGU = false; abrir(dest); }
@@ -3463,7 +3520,7 @@ page.addEventListener("submit", (e) => {
     e.preventDefault();
     const cap = Number(val("f-capacidade"));
     if (cap > 0 && turmaAlunos.length > cap) {
-      alert(`A turma tem ${turmaAlunos.length} alunos associados, acima da capacidade de ${cap}.`);
+      aviso(`A turma tem ${turmaAlunos.length} alunos associados, acima da capacidade de ${cap}.`);
       return;
     }
     const reg = {
@@ -3471,8 +3528,8 @@ page.addEventListener("submit", (e) => {
       sala: val("f-sala"), alunos: turmaAlunos.slice(),
     };
     const lista = getTurmas();
-    if (editTurmaIdx != null) { lista[editTurmaIdx] = reg; alert("Turma atualizada com sucesso!"); }
-    else { lista.push(reg); alert("Turma cadastrada com sucesso!"); }
+    if (editTurmaIdx != null) { lista[editTurmaIdx] = reg; aviso("Turma atualizada com sucesso!"); }
+    else { lista.push(reg); aviso("Turma cadastrada com sucesso!"); }
     setTurmas(lista);
     editTurmaIdx = null;
     abrir("turmas");
@@ -3484,8 +3541,8 @@ page.addEventListener("submit", (e) => {
     const item = getEstoque()[retiradaIdx];
     if (!item) { abrir("estoque"); return; }
     const qtd = Number(val("f-qtd"));
-    if (!(qtd > 0)) { alert("Informe uma quantidade válida."); return; }
-    if (qtd > item.quantidade) { alert(`Quantidade indisponível. Em estoque: ${item.quantidade} ${item.unidade || ""}.`); return; }
+    if (!(qtd > 0)) { aviso("Informe uma quantidade válida."); return; }
+    if (qtd > item.quantidade) { aviso(`Quantidade indisponível. Em estoque: ${item.quantidade} ${item.unidade || ""}.`); return; }
     const estoque = getEstoque();
     estoque[retiradaIdx].quantidade = item.quantidade - qtd;
     setEstoque(estoque);
@@ -3496,7 +3553,7 @@ page.addEventListener("submit", (e) => {
     });
     setRetiradas(retiradas);
     retiradaIdx = null;
-    alert("Retirada registrada com sucesso!");
+    aviso("Retirada registrada com sucesso!");
     abrir("estoque");
     return;
   }
@@ -3508,8 +3565,8 @@ page.addEventListener("submit", (e) => {
       quantidade: Number(val("f-quantidade")) || 0, unidade: val("f-unidade"), validade: val("f-validade"),
     };
     const lista = getEstoque();
-    if (editEstoqueIdx != null) { lista[editEstoqueIdx] = reg; alert("Item atualizado com sucesso!"); }
-    else { lista.push(reg); alert("Item cadastrado com sucesso!"); }
+    if (editEstoqueIdx != null) { lista[editEstoqueIdx] = reg; aviso("Item atualizado com sucesso!"); }
+    else { lista.push(reg); aviso("Item cadastrado com sucesso!"); }
     setEstoque(lista);
     editEstoqueIdx = null;
     abrir("estoque");
@@ -3519,7 +3576,7 @@ page.addEventListener("submit", (e) => {
   if (e.target.id === "form-cardapio") {
     e.preventDefault();
     const turma = document.getElementById("cardapio-turma").value;
-    if (!turma) { alert("Selecione a turma do cardápio."); return; }
+    if (!turma) { aviso("Selecione a turma do cardápio."); return; }
     salvarDiasCardapio();
     const itens = [...document.querySelectorAll(".cardapio-item-row")]
       .map((r) => ({ alimento: r.querySelector(".ci-alimento").value, quantidade: Number(r.querySelector(".ci-qtd").value) || 0 }))
@@ -3528,7 +3585,7 @@ page.addEventListener("submit", (e) => {
     const conflitos = verificarRestricoes(turma, itens);
     if (conflitos.length) {
       notificar("secretaria", `Cardápio de ${turma} não salvo: ${conflitos.length} aluno(s) com restrição a alimentos inseridos.`);
-      alert(
+      aviso(
         "Não foi possível salvar o cardápio.\n\nHá aluno(s) com restrição a alimentos inseridos:\n" +
         conflitos.map((c) => "• " + c.aluno + " — " + c.alimento).join("\n") +
         "\n\nRemova esses alimentos do cardápio para poder salvar."
@@ -3564,11 +3621,10 @@ page.addEventListener("submit", (e) => {
     const reg = {
       nome: val("f-nome"), descricao: val("f-descricao"),
       campos: docCampos.slice(), texto: document.getElementById("f-texto").innerHTML,
-      assinatura: docAssinatura,
     };
     const lista = getDocumentos();
-    if (editDocIdx != null) { lista[editDocIdx] = reg; alert("Documento atualizado com sucesso!"); }
-    else { lista.push(reg); alert("Documento cadastrado com sucesso!"); }
+    if (editDocIdx != null) { lista[editDocIdx] = reg; aviso("Documento atualizado com sucesso!"); }
+    else { lista.push(reg); aviso("Documento cadastrado com sucesso!"); }
     setDocumentos(lista);
     editDocIdx = null;
     abrir("documentosCadastrar");
@@ -3579,7 +3635,7 @@ page.addEventListener("submit", (e) => {
     e.preventDefault();
     const documento = val("f-documento");
     const aluno = val("f-aluno");
-    if (!documento || !aluno) { alert("Selecione o documento e o aluno."); return; }
+    if (!documento || !aluno) { aviso("Selecione o documento e o aluno."); return; }
     const agora = new Date();
     const data = agora.toLocaleDateString("pt-BR") + " " + agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
     const docObj = getDocumentos().find((x) => x.nome === documento);
@@ -3588,7 +3644,7 @@ page.addEventListener("submit", (e) => {
     document.querySelectorAll(".campo-manual").forEach((el) => { manuais[el.dataset.campo.toLowerCase()] = el.value.trim(); });
     const textoPreenchido = docObj ? preencherTexto(docObj.texto, alunoObj, manuais) : "";
     const emissoes = getEmissoes();
-    emissoes.unshift({ documento, aluno, data, texto: textoPreenchido, assinatura: docObj ? docObj.assinatura : "" });
+    emissoes.unshift({ documento, aluno, data, texto: textoPreenchido });
     setEmissoes(emissoes);
     viewEmissaoIdx = 0;
     abrir("documentoGerado");
@@ -3603,8 +3659,8 @@ page.addEventListener("submit", (e) => {
       bairro: val("f-bairro"), numero: val("f-numero"), complemento: val("f-complemento"),
     };
     const lista = getResponsaveis();
-    if (editRespIdx != null) { lista[editRespIdx] = reg; alert("Responsável atualizado com sucesso!"); }
-    else { lista.push(reg); alert("Responsável cadastrado com sucesso!"); }
+    if (editRespIdx != null) { lista[editRespIdx] = reg; aviso("Responsável atualizado com sucesso!"); }
+    else { lista.push(reg); aviso("Responsável cadastrado com sucesso!"); }
     setResponsaveis(lista);
     editRespIdx = null;
     { const dest = voltar("responsaveis"); voltarGU = false; abrir(dest); }
@@ -3631,8 +3687,8 @@ page.addEventListener("submit", (e) => {
       emergencia, autorizados, qr_code: alunoAnterior.qr_code || gerarQRCode(),
     };
     const lista = getAlunos();
-    if (editAlunoIdx != null) { lista[editAlunoIdx] = reg; alert("Aluno atualizado com sucesso!"); }
-    else { lista.push(reg); alert("Aluno cadastrado com sucesso!\nNúmero de matrícula: " + reg.matricula); }
+    if (editAlunoIdx != null) { lista[editAlunoIdx] = reg; aviso("Aluno atualizado com sucesso!"); }
+    else { lista.push(reg); aviso("Aluno cadastrado com sucesso!\nNúmero de matrícula: " + reg.matricula); }
     setAlunos(lista);
     editAlunoIdx = null;
     abrir("alunos");
@@ -3643,8 +3699,8 @@ page.addEventListener("submit", (e) => {
     e.preventDefault();
     const reg = { tipo: val("f-tipo"), descricao: val("f-descricao"), data: val("f-data"), usuario: "Administrador" };
     const lista = getMovimentacoes();
-    if (editMovIdx != null) { lista[editMovIdx] = reg; alert("Movimentação atualizada com sucesso!"); }
-    else { lista.unshift(reg); alert("Movimentação registrada com sucesso!"); }
+    if (editMovIdx != null) { lista[editMovIdx] = reg; aviso("Movimentação atualizada com sucesso!"); }
+    else { lista.unshift(reg); aviso("Movimentação registrada com sucesso!"); }
     setMovimentacoes(lista);
     editMovIdx = null;
     abrir("historico");
