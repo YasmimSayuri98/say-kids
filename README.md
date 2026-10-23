@@ -42,7 +42,7 @@ O sistema possui **7 perfis de acesso**, cada um com suas telas e permissões:
 | Auxiliar | ana@saykids.com | auxiliar123 |
 | Porteiro | roberto@saykids.com | porteiro123 |
 | Almoxarife | marcia@saykids.com | almoxarife123 |
-| Responsável | *(e-mail do responsável cadastrado)* | responsavel123 |
+| Responsável | carla@email.com | responsavel123 |
 
 ## 🛠️ Tecnologias
 
