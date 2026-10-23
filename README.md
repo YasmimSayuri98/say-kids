@@ -1,17 +1,17 @@
-# 🧸 Say Kids — Sistema de Gestão Escolar de Educação Infantil
+# Say Kids — Sistema de Gestão Escolar de Educação Infantil
 
-Projeto acadêmico do curso de **Análise e Desenvolvimento de Sistemas (ADS)** — disciplina de Projeto de Sistemas.
+Projeto acadêmico do curso de **Análise e Desenvolvimento de Sistemas (ADS)** — disciplina: Projeto de Sistemas.
 Sistema web completo para a gestão de uma escola de educação infantil (creche/pré-escola),
 com controle de alunos, turmas, agenda diária, cardápio, estoque, frequência por QR Code e emissão de documentos.
 
-## 🌐 Acesso online (sistema hospedado)
+## Acesso online (sistema hospedado)
 
 **https://say-kids-eight.vercel.app**
 
 > O sistema está hospedado na **Vercel** e usa um banco de dados **online (Supabase)**,
 > então os dados ficam salvos e compartilhados entre todos os dispositivos (PC e celular).
 
-## ✨ Funcionalidades por perfil
+## Funcionalidades por perfil
 
 O sistema possui **7 perfis de acesso**, cada um com suas telas e permissões:
 
@@ -26,13 +26,13 @@ O sistema possui **7 perfis de acesso**, cada um com suas telas e permissões:
 | **Responsável** | Acompanha o(s) filho(s): frequência, alimentação, sono, atividades, observações, cardápio; edita a foto e envia recados. |
 
 ### Destaques
-- 📷 **Frequência por QR Code** — cada aluno tem uma tag de QR Code (imprimível) que o porteiro lê pela câmera para registrar entrada/saída.
-- 🍎 **Cardápio com verificação de restrições** — o sistema bloqueia o cardápio se houver aluno com restrição a algum alimento, e gera lista de compras quando falta estoque.
-- 📄 **Emissão de documentos** — modelos com campos preenchidos automaticamente, editor com formatação, logo e assinatura.
-- 🔔 **Notificações** — avisos de entrada/saída para os responsáveis, recados, etc.
-- 📱 **Responsivo** — funciona no computador e no celular.
+- **Frequência por QR Code** — cada aluno tem uma tag de QR Code (imprimível) que o porteiro lê pela câmera para registrar entrada/saída.
+- **Cardápio com verificação de restrições** — o sistema bloqueia o cardápio se houver aluno com restrição a algum alimento, e gera lista de compras quando falta estoque.
+- **Emissão de documentos** — modelos com campos preenchidos automaticamente, editor com formatação, logo e assinatura.
+- **Notificações** — avisos de entrada/saída para os responsáveis, recados, etc.
+- **Responsivo** — funciona no computador e no celular.
 
-## 🔑 Acessos de teste
+## Acessos de teste
 
 | Perfil | E-mail | Senha |
 |---|---|---|
@@ -44,7 +44,7 @@ O sistema possui **7 perfis de acesso**, cada um com suas telas e permissões:
 | Almoxarife | marcia@saykids.com | almoxarife123 |
 | Responsável | carla@email.com | responsavel123 |
 
-## 🛠️ Tecnologias
+## Tecnologias
 
 - **Front-end:** HTML, CSS e JavaScript puro (sem frameworks de build).
 - **Banco de dados:** [Supabase](https://supabase.com) (PostgreSQL online), acessado direto do navegador via API.
@@ -52,7 +52,7 @@ O sistema possui **7 perfis de acesso**, cada um com suas telas e permissões:
 - **Leitura/geração de QR Code:** bibliotecas `qrcodejs` e `jsQR`.
 - **Testes automatizados:** [Jest](https://jestjs.io).
 
-## ▶️ Como executar
+## Como executar
 
 ### Online
 Basta acessar o link: **https://say-kids-eight.vercel.app**
@@ -63,7 +63,7 @@ Basta acessar o link: **https://say-kids-eight.vercel.app**
 
 > Observação: para usar a **câmera** do porteiro, o sistema precisa rodar em `https` (como no link da Vercel) ou em `localhost` — por segurança, os navegadores não liberam a câmera ao abrir o arquivo direto (`file://`).
 
-## 🧪 Testes automatizados
+## Testes automatizados
 
 O projeto tem testes automatizados com **Jest**, cobrindo o login e as regras de negócio
 (turmas, restrições alimentares, estoque e recados).
@@ -73,7 +73,7 @@ npm install   # só na primeira vez
 npm test
 ```
 
-## 📁 Estrutura do projeto
+## Estrutura do projeto
 
 ```
 say-kids/
@@ -89,7 +89,7 @@ say-kids/
 └── assets/             # Imagens
 ```
 
-## 👩‍💻 Autora
+## Autora
 
 **Yasmim Sayuri Anami de Assis**
-Curso de Análise e Desenvolvimento de Sistemas.
+Análise e Desenvolvimento de Sistemas.
