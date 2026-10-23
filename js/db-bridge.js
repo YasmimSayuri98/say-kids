@@ -42,25 +42,45 @@
     return h;
   }
 
-  var _set = localStorage.setItem.bind(localStorage); // gravação local "pura" (sem reenviar ao banco)
+  // Gravação local "pura" (sem reenviar ao banco), usando o método ORIGINAL do navegador
+  var _protoSet = Storage.prototype.setItem;
+  var _set = function (k, v) { return _protoSet.call(window.localStorage, k, v); };
+  // Limpa um item "setItem" que versões antigas criavam por engano no Safari
+  try { if (window.localStorage.getItem("setItem") !== null) window.localStorage.removeItem("setItem"); } catch (e) {}
 
   // Envia um store para o Supabase (upsert) usando fetch.
   // Sem keepalive: no Safari do iPhone o keepalive falha (e tem limite de 64KB,
   // que quebra envios maiores como alunos com foto).
+  // Diagnóstico: mostra na tela (uma vez por página) se a gravação no banco falhar
+  var jaAvisou = false;
+  function avisarErro(msg) {
+    console.warn("[Say Kids] Erro ao salvar no banco:", msg);
+    if (jaAvisou) return; jaAvisou = true;
+    setTimeout(function () {
+      if (typeof window.aviso === "function") window.aviso("Não foi possível salvar no banco de dados.\nDetalhe: " + msg, "erro");
+    }, 600);
+  }
+
   function enviarAoBanco(key, val) {
     var payload; try { payload = JSON.parse(val); } catch (e) { payload = val; }
     var body = JSON.stringify({ store_key: key, payload: payload, updated_at: new Date().toISOString() });
     try {
       fetch(REST, { method: "POST", headers: headersObj(true), body: body })
-        .then(function (r) { if (!r.ok && r.status) console.warn("[Say Kids] Falha ao salvar no banco:", r.status); })
-        .catch(function (e) { console.warn("[Say Kids] Erro ao salvar no banco:", e && e.message); });
-    } catch (e) {}
+        .then(function (r) {
+          if (!r.ok) r.text().then(function (t) { avisarErro("HTTP " + r.status + " " + (t || "").slice(0, 120)); });
+        })
+        .catch(function (e) { avisarErro((e && e.message) || "erro de rede"); });
+    } catch (e) { avisarErro("exceção: " + (e && e.message)); }
   }
+  window.__SK_VERSAO = "4";
 
-  // Write-through: toda escrita no sistema também vai para o Supabase
-  localStorage.setItem = function (key, val) {
-    try { _set(key, val); } catch (e) {} // local pode falhar (ex.: Safari privado) — não impede o envio
-    if (!ignorar(key)) enviarAoBanco(key, val);
+  // Write-through: toda escrita no sistema também vai para o Supabase.
+  // IMPORTANTE: no Safari (iPhone) NÃO dá para substituir "localStorage.setItem = ..."
+  // (o Safari ignora e cria um item chamado "setItem"). Por isso interceptamos no
+  // protótipo, que funciona em todos os navegadores.
+  Storage.prototype.setItem = function (key, val) {
+    try { _protoSet.call(this, key, val); } catch (e) {} // local pode falhar (ex.: modo privado) — não impede o envio
+    if (this === window.localStorage && !ignorar(String(key))) enviarAoBanco(String(key), String(val));
   };
 
   // Exposto para o painel.js (poll de notificações em tempo real)

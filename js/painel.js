@@ -2474,13 +2474,13 @@ function iniciarCameraQR() {
 
   // Tenta a câmera traseira (environment); se falhar, usa qualquer câmera disponível.
   qrReader.start({ facingMode: { exact: "environment" } }, config, aoLer)
-    .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno."; })
+    .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno. (v" + (window.__SK_VERSAO || "?") + ")"; })
     .catch(() => {
       qrReader.start({ facingMode: "environment" }, config, aoLer)
-        .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno."; })
+        .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno. (v" + (window.__SK_VERSAO || "?") + ")"; })
         .catch(() => {
           qrReader.start(true, config, aoLer) // true = primeira câmera disponível
-            .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno."; })
+            .then(() => { if (status) status.textContent = "Câmera ativa. Aponte para o QR Code do aluno. (v" + (window.__SK_VERSAO || "?") + ")"; })
             .catch(() => { if (status) status.textContent = "Não foi possível abrir a câmera. Permita o acesso ou use a leitura manual abaixo."; });
         });
     });
