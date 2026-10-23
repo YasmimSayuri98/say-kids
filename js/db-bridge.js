@@ -59,23 +59,41 @@
     console.warn("[Say Kids] Banco offline - usando dados locais.", e && e.message);
   }
 
+  // Envia um store para o Supabase (upsert) usando fetch — mais confiavel no iOS.
+  function enviarAoBanco(key, val) {
+    var payload;
+    try { payload = JSON.parse(val); } catch (e) { payload = val; }
+    var body = JSON.stringify({ store_key: key, payload: payload, updated_at: new Date().toISOString() });
+    try {
+      if (typeof fetch === "function") {
+        fetch(REST, {
+          method: "POST",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": "Bearer " + SUPABASE_KEY,
+            "Content-Type": "application/json",
+            "Prefer": "resolution=merge-duplicates",
+          },
+          body: body,
+          keepalive: true,
+          mode: "cors",
+        }).catch(function () {});
+      } else {
+        var x = new XMLHttpRequest();
+        x.open("POST", REST, true);
+        cabecalhos(x, true);
+        x.send(body);
+      }
+    } catch (e) {}
+  }
+
   // 2) Write-through: toda escrita nos dados do sistema tambem vai para o Supabase (upsert)
   var _set = localStorage.setItem.bind(localStorage);
   localStorage.setItem = function (key, val) {
     // O armazenamento local pode falhar (ex.: Safari em modo privado no iPhone).
     // Se falhar, NÃO impedimos o envio ao banco — o dado precisa chegar ao Supabase.
     try { _set(key, val); } catch (e) {}
-    if (!ignorar(key)) {
-      try {
-        var payload;
-        try { payload = JSON.parse(val); } catch (e) { payload = val; }
-        var body = JSON.stringify({ store_key: key, payload: payload, updated_at: new Date().toISOString() });
-        var x = new XMLHttpRequest();
-        x.open("POST", REST, true);
-        cabecalhos(x, true);
-        x.send(body);
-      } catch (e) {}
-    }
+    if (!ignorar(key)) enviarAoBanco(key, val);
   };
 
   // 3) Exposto para o painel.js (ex.: poll de notificacoes em tempo real do Supabase)
