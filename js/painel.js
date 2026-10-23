@@ -3921,20 +3921,22 @@ function checarNotificacoesNovas() {
 }
 // Entre abas do mesmo navegador (tempo real)
 window.addEventListener("storage", (e) => { if (e.key === "saykids_notificacoes") checarNotificacoesNovas(); });
-// Poll do servidor (captura registros feitos em outro computador)
+// Poll do Supabase (captura registros feitos em outro computador/celular, em tempo real)
 setInterval(() => {
-  if (!window.__DB_ONLINE) return;
+  const db = window.__SAYKIDS_DB;
+  if (!window.__DB_ONLINE || !db) return;
   try {
     const xhr = new XMLHttpRequest();
-    xhr.open("GET", "http://localhost:3000/api/stores", true);
+    xhr.open("GET", db.rest + "?store_key=eq.saykids_notificacoes&select=payload", true);
+    db.cabecalhos(xhr, false);
     xhr.onload = () => {
-      if (xhr.status !== 200) return;
+      if (xhr.status < 200 || xhr.status >= 300) return;
       try {
-        const stores = JSON.parse(xhr.responseText || "{}");
-        if (stores.saykids_notificacoes) {
-          const novo = JSON.stringify(stores.saykids_notificacoes);
+        const rows = JSON.parse(xhr.responseText || "[]");
+        if (rows[0] && rows[0].payload) {
+          const novo = JSON.stringify(rows[0].payload);
           if (novo !== localStorage.getItem("saykids_notificacoes")) {
-            localStorage.setItem("saykids_notificacoes", novo);
+            db.setLocalOnly("saykids_notificacoes", novo); // grava local sem reenviar ao banco
             checarNotificacoesNovas();
           }
         }
@@ -3942,7 +3944,7 @@ setInterval(() => {
     };
     xhr.send();
   } catch (err) {}
-}, 12000);
+}, 8000);
 (function initSino() {
   const sino = document.getElementById("sino");
   if (!sino) return;

@@ -75,4 +75,14 @@
       } catch (e) {}
     }
   };
+
+  // 3) Exposto para o painel.js (ex.: poll de notificacoes em tempo real do Supabase)
+  window.__SAYKIDS_DB = {
+    url: SUPABASE_URL,
+    key: SUPABASE_KEY,
+    rest: REST,
+    cabecalhos: cabecalhos,
+    // grava no localStorage SEM reenviar ao banco (evita re-upload do que acabou de ler)
+    setLocalOnly: function (k, v) { _set(k, v); },
+  };
 })();
