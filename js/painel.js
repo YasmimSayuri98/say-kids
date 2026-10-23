@@ -2402,17 +2402,32 @@ async function iniciarCameraQR() {
     status.textContent = "Não foi possível abrir a câmera. Use a leitura manual abaixo.";
     return;
   }
-  if (!("BarcodeDetector" in window)) {
+  // Leitura automática: usa o leitor nativo (BarcodeDetector) quando existir;
+  // senão, usa a biblioteca jsQR (funciona em qualquer navegador, inclusive iPhone/Safari).
+  if ("BarcodeDetector" in window) {
+    const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+    qrLoop = setInterval(async () => {
+      try {
+        const codes = await detector.detect(video);
+        if (codes && codes.length) processarQR(codes[0].rawValue);
+      } catch (e) {}
+    }, 500);
+  } else if (window.jsQR) {
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    qrLoop = setInterval(() => {
+      if (!video.videoWidth) return;
+      canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      try {
+        const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = window.jsQR(img.data, img.width, img.height, { inversionAttempts: "dontInvert" });
+        if (code && code.data) processarQR(code.data);
+      } catch (e) {}
+    }, 400);
+  } else {
     status.textContent = "Leitura automática indisponível neste navegador. Use a leitura manual abaixo.";
-    return;
   }
-  const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
-  qrLoop = setInterval(async () => {
-    try {
-      const codes = await detector.detect(video);
-      if (codes && codes.length) processarQR(codes[0].rawValue);
-    } catch (e) {}
-  }, 700);
 }
 function processarQR(valor) {
   let pessoa = (valor || "").trim();
@@ -2487,11 +2502,21 @@ function mostrarQRAluno(aluno) {
   const fechar = () => { if (div.parentNode) div.remove(); };
   div.addEventListener("click", (e) => { if (e.target === div || e.target.closest("[data-fechar-popup]")) fechar(); });
 }
-/* Desenha um QR real (via BarcodeDetector não serve p/ gerar); usamos um gerador simples de matriz
-   suficiente para leitura. Como não há lib externa, exibimos um padrão a partir do código. */
+/* Gera um QR Code REAL e scannável usando a biblioteca QRCode (qrcodejs).
+   Se a biblioteca não carregar (offline), cai num padrão visual só de aparência. */
 function desenharQR(el, texto) {
-  // Módulo simples: gera uma matriz determinística a partir do texto (placeholder visual legível).
-  // Observação: para um QR padrão scannável, integrar uma biblioteca de QR quando hospedado.
+  el.innerHTML = "";
+  if (window.QRCode) {
+    try {
+      new window.QRCode(el, {
+        text: texto, width: 200, height: 200,
+        colorDark: "#12335c", colorLight: "#ffffff",
+        correctLevel: window.QRCode.CorrectLevel.M,
+      });
+      return;
+    } catch (e) { /* cai no fallback abaixo */ }
+  }
+  // Fallback (sem internet / lib indisponível): padrão visual — NÃO é scannável.
   const n = 25, cell = 8;
   let h = 0; for (let i = 0; i < texto.length; i++) h = (h * 31 + texto.charCodeAt(i)) >>> 0;
   const rand = () => { h = (h * 1103515245 + 12345) & 0x7fffffff; return h / 0x7fffffff; };
